@@ -103,13 +103,18 @@ struct PreviewView: NSViewRepresentable {
             webView.evaluateJavaScript("document.getElementById('content').innerHTML = \(json)")
         }
 
+        /// Web and mail links go to the default app; in-document anchors and relative links stay put.
+        static func opensExternally(_ url: URL) -> Bool {
+            ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "")
+        }
+
         static func policy(for action: WKNavigationAction) -> WKNavigationActionPolicy {
             action.navigationType == .linkActivated ? .cancel : .allow
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
             let policy = Self.policy(for: action)
-            if policy == .cancel, let url = action.request.url { NSWorkspace.shared.open(url) }
+            if policy == .cancel, let url = action.request.url, Self.opensExternally(url) { NSWorkspace.shared.open(url) }
             return policy
         }
 
