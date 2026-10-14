@@ -34,8 +34,16 @@ public final class SyntaxHighlighter {
     private var cache: [String: [Highlight]] = [:]   // paragraph text → highlights relative to the paragraph
     private let tagger = NLTagger(tagSchemes: [.lexicalClass])
     private let recognizer = NLLanguageRecognizer()
+    private let isSupported: (NLLanguage) -> Bool
 
-    public init() {}
+    /// `isSupported` says whether a lexical-class model is installed for a language (injectable for tests).
+    public init(isSupported: @escaping (NLLanguage) -> Bool = SyntaxHighlighter.hasModel) {
+        self.isSupported = isSupported
+    }
+
+    public static func hasModel(for language: NLLanguage) -> Bool {
+        NLTagger.availableTagSchemes(for: .word, language: language).contains(.lexicalClass)
+    }
 
     /// Highlights for every paragraph touched by `range` (UTF-16, absolute), minus `excluding` (e.g. code).
     public func highlights(in text: String, range: NSRange, excluding: [NSRange]) -> [Highlight] {
@@ -59,22 +67,23 @@ public final class SyntaxHighlighter {
     /// (the caller may request the model with `NLTagger.requestAssets`).
     public static func needsAssets(_ text: String) -> NLLanguage? {
         guard let language = NLLanguageRecognizer.dominantLanguage(for: text) else { return nil }
-        return NLTagger.availableTagSchemes(for: .word, language: language).contains(.lexicalClass) ? nil : language
+        return hasModel(for: language) ? nil : language
     }
 
     private func paragraphHighlights(_ paragraph: String) -> [Highlight] {
         if let cached = cache[paragraph] { return cached }
-        let highlights = tag(paragraph)
+        // nil = no model for this language yet: not cached, so colours appear once the model downloads.
+        guard let highlights = tag(paragraph) else { return [] }
         if cache.count >= Self.cacheLimit { cache.removeAll(keepingCapacity: true) }
         cache[paragraph] = highlights
         return highlights
     }
 
-    private func tag(_ paragraph: String) -> [Highlight] {
+    private func tag(_ paragraph: String) -> [Highlight]? {
         recognizer.reset()
         recognizer.processString(paragraph)
-        guard let language = recognizer.dominantLanguage,
-              NLTagger.availableTagSchemes(for: .word, language: language).contains(.lexicalClass) else { return [] }
+        guard let language = recognizer.dominantLanguage else { return [] }
+        guard isSupported(language) else { return nil }
         tagger.string = paragraph
         let whole = paragraph.startIndex..<paragraph.endIndex
         tagger.setLanguage(language, range: whole)

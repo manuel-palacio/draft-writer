@@ -61,6 +61,7 @@ public enum Library {
         let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys,
                                                         options: [.skipsHiddenFiles, .skipsPackageDescendants])
         while let url = enumerator?.nextObject() as? URL {
+            try Task.checkCancellation()   // a newer query replaced this search
             guard isNote(url) else { continue }
             if url.deletingPathExtension().lastPathComponent.range(of: needle, options: options) != nil {
                 byName.append(url)
@@ -93,8 +94,10 @@ public enum Library {
     public static func rename(_ url: URL, to newName: String) throws -> URL {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !trimmed.contains("/"), !trimmed.hasPrefix(".") else { throw LibraryError.invalidName(newName) }
-        let name = (trimmed as NSString).pathExtension.isEmpty && !url.pathExtension.isEmpty
-            ? "\(trimmed).\(url.pathExtension)" : trimmed
+        // "Meeting 2026.10.14" has the "extension" 14: keep the note's own extension unless the new
+        // name ends in one the library recognises.
+        let typed = (trimmed as NSString).pathExtension.lowercased()
+        let name = fileExtensions.contains(typed) || url.pathExtension.isEmpty ? trimmed : "\(trimmed).\(url.pathExtension)"
         let destination = url.deletingLastPathComponent().appending(path: name)
         try FileManager.default.moveItem(at: url, to: destination)   // throws if the destination exists
         return destination

@@ -54,6 +54,16 @@ import Testing
         #expect(highlighter.highlights(in: text, range: all, excluding: []) == highlighter.highlights(in: text, range: all, excluding: []))
     }
 
+    @Test func missingModelIsNotCached() {
+        var supported = false
+        let highlighter = SyntaxHighlighter(isSupported: { _ in supported })
+        let text = "The quick fox jumps quietly and happily."
+        let all = NSRange(location: 0, length: (text as NSString).length)
+        #expect(highlighter.highlights(in: text, range: all, excluding: []).isEmpty)
+        supported = true   // the model finished downloading
+        #expect(!highlighter.highlights(in: text, range: all, excluding: []).isEmpty)
+    }
+
     @Test func needsAssetsIsNilForEnglish() {
         #expect(SyntaxHighlighter.needsAssets("The quick fox jumps over the lazy dog.") == nil)
     }

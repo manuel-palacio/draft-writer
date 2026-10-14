@@ -18,13 +18,29 @@ final class LibraryStore {
             Task { await refresh() }
         }
     }
-    var query = "" { didSet { if query != oldValue { Task { await refresh() } } } }
+    /// Search text. Searching starts 200 ms after the last keystroke.
+    var query = "" {
+        didSet {
+            guard query != oldValue else { return }
+            queryTask?.cancel()
+            queryTask = Task { [weak self] in
+                try? await Task.sleep(for: Self.queryDelay)
+                guard !Task.isCancelled else { return }
+                await self?.refresh()
+            }
+        }
+    }
     /// The row selected in the sidebar (a note or a folder).
     var selection: URL?
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var watcher: FolderWatcher?
-    @ObservationIgnored private var accessedURL: URL?
+    /// Security scopes opened this session. Never closed while the app runs: notes opened from a
+    /// library folder save through its scope, even after another folder is chosen.
+    @ObservationIgnored private(set) var activeScopes: [URL] = []
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private var queryTask: Task<Void, Never>?
+    static let queryDelay: Duration = .milliseconds(200)
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
@@ -41,7 +57,11 @@ final class LibraryStore {
     func choose(_ folder: URL) throws {
         let bookmark = try folder.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
         defaults.set(bookmark, forKey: Self.bookmarkKey)
-        activate(folder)
+        // Activate through the bookmark, so the security scope is one this process can keep open.
+        var isStale = false
+        let scoped = (try? URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil,
+                               bookmarkDataIsStale: &isStale)) ?? folder
+        activate(scoped)
     }
 
     /// Re-opens the saved folder. A bookmark that no longer resolves to an existing folder is forgotten,
@@ -51,9 +71,8 @@ final class LibraryStore {
         var isStale = false
         guard let url = try? URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil,
                                  bookmarkDataIsStale: &isStale),
-              FileManager.default.fileExists(atPath: url.path) else {
-            defaults.removeObject(forKey: Self.bookmarkKey)
-            deactivate()
+              Self.isUsable(url) else {
+            forget()
             return
         }
         if isStale, let fresh = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
@@ -62,18 +81,49 @@ final class LibraryStore {
         activate(url)
     }
 
+    /// Rescans (or searches) the library. A newer refresh cancels an older one, and results are applied only
+    /// if the root, sort and query they were made for are still current. A root that was deleted or moved
+    /// to the Trash is forgotten, which brings back the "Choose Folder…" prompt.
     func refresh() async {
+        refreshTask?.cancel()
+        var current = Task { await performRefresh() }
+        refreshTask = current
+        await current.value
+        // If a newer refresh superseded this one, wait for that, so callers always see fresh state.
+        while let latest = refreshTask, latest != current {
+            current = latest
+            await current.value
+        }
+    }
+
+    private func performRefresh() async {
         guard let root else { return }
+        guard Self.isUsable(root) else {
+            forget()
+            return
+        }
         let sort = sort
         let query = query
         if query.isEmpty {
             let scanned = await Task.detached { (try? Library.scan(root, sort: sort)) ?? [] }.value
+            guard !Task.isCancelled, root == self.root, sort == self.sort, self.query.isEmpty else { return }
             items = scanned
             searchResults = []
         } else {
-            let found = await Task.detached { (try? Library.search(root, query: query)) ?? [] }.value
-            if query == self.query { searchResults = found }
+            let search = Task.detached { (try? Library.search(root, query: query)) ?? [] }
+            let found = await withTaskCancellationHandler { await search.value } onCancel: { search.cancel() }
+            guard !Task.isCancelled, root == self.root, query == self.query else { return }
+            searchResults = found
         }
+    }
+
+    /// A library root must exist and must not be in the Trash (Finder "deletes" folders by moving them there,
+    /// and the bookmark follows).
+    static func isUsable(_ url: URL) -> Bool {
+        guard FileManager.default.fileExists(atPath: url.path) else { return false }
+        var relationship = FileManager.URLRelationship.other
+        try? FileManager.default.getRelationship(&relationship, of: .trashDirectory, in: .userDomainMask, toItemAt: url)
+        return relationship != .contains && !url.resolvingSymlinksInPath().pathComponents.contains(".Trash")
     }
 
     func newNote(in folder: URL?) throws -> URL {
@@ -97,7 +147,7 @@ final class LibraryStore {
 
     private func activate(_ url: URL) {
         deactivate()
-        if url.startAccessingSecurityScopedResource() { accessedURL = url }
+        if !activeScopes.contains(url), url.startAccessingSecurityScopedResource() { activeScopes.append(url) }
         root = url
         watcher = FolderWatcher(url) { [weak self] in
             Task { @MainActor in await self?.refresh() }
@@ -105,13 +155,18 @@ final class LibraryStore {
         Task { await refresh() }
     }
 
+    /// Drops the saved folder: the sidebar shows "Choose Folder…" again.
+    private func forget() {
+        defaults.removeObject(forKey: Self.bookmarkKey)
+        deactivate()
+    }
+
     private func deactivate() {
         watcher?.stop()
         watcher = nil
-        accessedURL?.stopAccessingSecurityScopedResource()
-        accessedURL = nil
         root = nil
         items = []
         searchResults = []
+        selection = nil
     }
 }

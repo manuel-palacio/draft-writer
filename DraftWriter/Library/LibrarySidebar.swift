@@ -11,6 +11,9 @@ struct LibrarySidebar: View {
     @State private var newName = ""
     @State private var trashing: URL?
     @State private var errorMessage: String?
+    /// This window's row selection. Clicking a note opens it and clears the selection, so clicking it again
+    /// (after closing its window) opens it again, and other windows' sidebars are unaffected.
+    @State private var selection: URL?
 
     var body: some View {
         content
@@ -27,7 +30,14 @@ struct LibrarySidebar: View {
                     }
                 }
             }
-            .onChange(of: store.selection) { _, url in open(url) }
+            .onChange(of: selection) { _, url in
+                guard let url else { return }
+                store.selection = url   // where ⌥⌘N puts new notes
+                if isNote(url) {
+                    open(url)
+                    selection = nil
+                }
+            }
             .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
                 TextField("Name", text: $newName)
                 Button("Rename") { commitRename() }
@@ -55,11 +65,11 @@ struct LibrarySidebar: View {
                 Button("Choose Folder…") { chooseFolder() }
             }
         } else if !store.query.isEmpty {
-            List(store.searchResults, id: \.self, selection: $store.selection) { url in
+            List(store.searchResults, id: \.self, selection: $selection) { url in
                 row(name: url.deletingPathExtension().lastPathComponent, url: url, isFolder: false)
             }
         } else {
-            List(selection: $store.selection) {
+            List(selection: $selection) {
                 OutlineGroup(store.items, children: \.children) { item in
                     row(name: item.isFolder ? item.name : (item.name as NSString).deletingPathExtension,
                         url: item.url, isFolder: item.isFolder)
@@ -86,8 +96,11 @@ struct LibrarySidebar: View {
             }
     }
 
-    private func open(_ url: URL?) {
-        guard let url, Library.fileExtensions.contains(url.pathExtension.lowercased()) else { return }
+    private func isNote(_ url: URL) -> Bool {
+        Library.fileExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    private func open(_ url: URL) {
         Task { @MainActor in
             do { try await openDocument(at: url) } catch { errorMessage = error.localizedDescription }
         }

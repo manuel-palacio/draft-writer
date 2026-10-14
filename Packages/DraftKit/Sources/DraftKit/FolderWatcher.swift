@@ -1,7 +1,8 @@
 import CoreServices
 import Foundation
 
-/// Calls `onChange` (on a private queue) when anything under a folder changes, using FSEvents.
+/// Calls `onChange` (on a private queue) when anything under a folder changes, or the folder itself is
+/// moved or deleted, using FSEvents. Call `stop()` from outside the callback queue.
 public final class FolderWatcher: @unchecked Sendable {
     private let onChange: @Sendable () -> Void
     private let queue = DispatchQueue(label: "DraftKit.FolderWatcher")
@@ -15,7 +16,7 @@ public final class FolderWatcher: @unchecked Sendable {
             guard let info else { return }
             Unmanaged<FolderWatcher>.fromOpaque(info).takeUnretainedValue().onChange()
         }
-        let flags = FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer)
+        let flags = FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagWatchRoot)
         guard let stream = FSEventStreamCreate(nil, callback, &context, [url.resolvingSymlinksInPath().path] as CFArray,
                                                FSEventStreamEventId(kFSEventStreamEventIdSinceNow), latency, flags) else { return }
         FSEventStreamSetDispatchQueue(stream, queue)
@@ -29,6 +30,7 @@ public final class FolderWatcher: @unchecked Sendable {
         FSEventStreamInvalidate(stream)
         FSEventStreamRelease(stream)
         self.stream = nil
+        queue.sync {}   // let a callback already in flight finish before `self` can go away
     }
 
     deinit { stop() }

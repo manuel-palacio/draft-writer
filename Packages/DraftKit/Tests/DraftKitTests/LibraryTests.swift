@@ -62,6 +62,13 @@ import Testing
         #expect(try String(contentsOf: renamed, encoding: .utf8) == "keep")
     }
 
+    @Test func renameWithDotsKeepsExtension() throws {
+        let a = try file("a.md")
+        #expect(try Library.rename(a, to: "Meeting 2026.10.14").lastPathComponent == "Meeting 2026.10.14.md")
+        let b = try file("b.md")
+        #expect(try Library.rename(b, to: "notes.txt").lastPathComponent == "notes.txt")
+    }
+
     @Test func renameRefusesExisting() throws {
         let a = try file("a.md", "A")
         let b = try file("b.md", "B")

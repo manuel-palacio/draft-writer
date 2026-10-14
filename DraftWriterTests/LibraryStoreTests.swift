@@ -40,6 +40,45 @@ import Testing
         #expect(defaults.data(forKey: LibraryStore.bookmarkKey) == nil)
     }
 
+    @Test func trashedFolderIsForgottenOnRelaunch() throws {
+        try LibraryStore(defaults: defaults).choose(folder)
+        try FileManager.default.trashItem(at: folder, resultingItemURL: nil)
+        let relaunched = LibraryStore(defaults: defaults)
+        relaunched.restore()
+        #expect(relaunched.root == nil)
+        #expect(defaults.data(forKey: LibraryStore.bookmarkKey) == nil)
+    }
+
+    @Test func folderTrashedWhileRunningShowsPrompt() async throws {
+        let store = LibraryStore(defaults: defaults)
+        try store.choose(folder)
+        await store.refresh()
+        try FileManager.default.trashItem(at: folder, resultingItemURL: nil)
+        await store.refresh()
+        #expect(store.root == nil)
+        #expect(store.items.isEmpty)
+    }
+
+    @Test func switchingFoldersKeepsEarlierAccess() throws {
+        let other = FileManager.default.temporaryDirectory.appending(path: "store-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        let store = LibraryStore(defaults: defaults)
+        try store.choose(folder)
+        try store.choose(other)
+        // notes opened from the first folder still save: its security scope stays active this session
+        #expect(store.activeScopes.map(\.standardizedFileURL).contains(folder.standardizedFileURL))
+    }
+
+    @Test func clearingQueryShowsTreeNotStaleResults() async throws {
+        let store = LibraryStore(defaults: defaults)
+        try store.choose(folder)
+        store.query = "apple"
+        store.query = ""
+        await store.refresh()
+        #expect(store.searchResults.isEmpty)
+        #expect(store.items.count == 2)
+    }
+
     @Test func queryRunsSearch() async throws {
         let store = LibraryStore(defaults: defaults)
         try store.choose(folder)
