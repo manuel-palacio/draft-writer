@@ -16,7 +16,12 @@ targets:
   DraftWriter:
     type: application
     platform: macOS
-    sources: [DraftWriter]
+    sources:
+      - path: DraftWriter
+        excludes: ["Resources/Fonts"]
+      - path: DraftWriter/Resources/Fonts
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: DraftKit
     settings:
