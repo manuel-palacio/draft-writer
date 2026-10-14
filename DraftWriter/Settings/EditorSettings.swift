@@ -46,6 +46,7 @@ final class EditorSettings {
     var focusMode: FocusMode { didSet { store(focusMode.rawValue, "focusMode") } }
     var typewriter: Bool { didSet { store(typewriter, "typewriter") } }
     var showPreview: Bool { didSet { store(showPreview, "showPreview") } }
+    var pageSize: PageSize { didSet { store(pageSize.rawValue, "pageSize") } }
 
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -58,6 +59,7 @@ final class EditorSettings {
         focusMode = defaults.string(forKey: "focusMode").flatMap(FocusMode.init) ?? .off
         typewriter = defaults.bool(forKey: "typewriter")
         showPreview = defaults.bool(forKey: "showPreview")
+        pageSize = defaults.string(forKey: "pageSize").flatMap(PageSize.init) ?? .a4
     }
 
     var editorFont: NSFont { Theme.font(font, size: fontSize) }

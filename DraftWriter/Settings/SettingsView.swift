@@ -17,6 +17,9 @@ struct SettingsView: View {
                    step: 5) {
                 Text("Line width: \(settings.columnWidth) characters")
             }
+            Picker("PDF page size", selection: $settings.pageSize) {
+                ForEach(PageSize.allCases) { Text($0.title).tag($0) }
+            }
             Picker("Appearance", selection: $settings.appearance) {
                 Text("Automatic").tag(Appearance.auto)
                 Text("Light").tag(Appearance.light)

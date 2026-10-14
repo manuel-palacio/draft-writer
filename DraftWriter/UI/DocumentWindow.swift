@@ -42,7 +42,13 @@ struct DocumentWindow: View {
         .toolbarVisibility(isTyping ? .hidden : .automatic, for: .windowToolbar)
         .onContinuousHover { _ in if isTyping { isTyping = false } }
         .onChange(of: document.text) { isTyping = true }
+        .focusedSceneValue(\.exportSource, ExportSource(markdown: document.text, title: title,
+                                                         documentFolder: fileURL?.deletingLastPathComponent()))
         .task(id: StatsInput(text: document.text, selection: selection)) { await updateStats() }
+    }
+
+    private var title: String {
+        fileURL?.deletingPathExtension().lastPathComponent ?? "Untitled"
     }
 
     private var encodingBanner: some View {
