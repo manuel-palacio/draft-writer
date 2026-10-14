@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct DraftWriterApp: App {
     @State private var settings = EditorSettings.shared
+    @State private var library = LibraryStore.shared
 
     init() {
         #if DEBUG
@@ -10,6 +11,7 @@ struct DraftWriterApp: App {
             assert(Theme.font(font, size: 17).fontName.hasPrefix("iAWriter"), "Bundled iA font \(font) did not load")
         }
         #endif
+        LibraryStore.shared.restore()
     }
 
     var body: some Scene {
@@ -19,6 +21,7 @@ struct DraftWriterApp: App {
         .commands {
             EditorCommands(settings: settings)
             ExportCommands(settings: settings)
+            LibraryCommands(settings: settings, store: library)
         }
         Settings {
             SettingsView(settings: settings)

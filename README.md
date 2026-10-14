@@ -14,8 +14,10 @@ Your files stay plain `.md` text: Draft Writer only changes how they look while 
 - Light, dark and automatic appearance
 - Live preview beside the editor that follows your scrolling (GitHub-flavoured Markdown: tables, task lists, strikethrough)
 - Export to self-contained HTML or paginated PDF (A4 or US Letter), and print
-
-Coming next: part-of-speech highlighting and a library sidebar (M3).
+- Syntax highlighting: colour nouns, verbs, adjectives, adverbs and conjunctions (English, French,
+  German, Spanish and the other languages Apple's NaturalLanguage tags; others, such as Swedish, stay plain)
+- Library sidebar: browse, search (names and contents), rename and trash the notes in one folder;
+  new notes in the selected folder
 
 ## Shortcuts
 
@@ -26,6 +28,9 @@ Coming next: part-of-speech highlighting and a library sidebar (M3).
 | ⌘R | Show or hide the preview |
 | ⇧⌘E | Export as HTML |
 | ⌘P | Print |
+| ⇧⌘H | Syntax highlighting (View > Highlight picks the word classes) |
+| ⌘1 | Show or hide the library |
+| ⌥⌘N | New note in the library |
 | ⌘, | Settings (font, size, line width, appearance) |
 
 ## Build
@@ -38,8 +43,8 @@ Requires macOS 15+ and Xcode 26+.
 
 The Xcode project is generated from `project.yml` and is not committed.
 
-Relative images (`![](img/photo.png)`) appear in the preview only when Draft Writer may read the
-document's folder (the sandbox grants access to the open file itself, not its neighbours).
+Relative images (`![](img/photo.png)`) appear in the preview and exports for notes inside your library
+folder. For files elsewhere, the sandbox only grants access to the open file itself, not its neighbours.
 Raw HTML in documents is not rendered.
 
 ## Tests
