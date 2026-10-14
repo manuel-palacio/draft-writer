@@ -1,0 +1,68 @@
+name: DraftWriter
+options:
+  bundleIdPrefix: io.github.manuel-palacio
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+packages:
+  DraftKit:
+    path: Packages/DraftKit
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  DraftWriter:
+    type: application
+    platform: macOS
+    sources: [DraftWriter]
+    dependencies:
+      - package: DraftKit
+    settings:
+      base:
+        PRODUCT_NAME: "Draft Writer"
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.manuel-palacio.DraftWriter
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: DraftWriter/Info.plist
+      properties:
+        CFBundleDisplayName: Draft Writer
+        LSApplicationCategoryType: public.app-category.productivity
+        ATSApplicationFontsPath: Fonts
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Markdown Document
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Default
+            LSItemContentTypes: [net.daringfireball.markdown]
+          - CFBundleTypeName: Plain Text Document
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.plain-text]
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: net.daringfireball.markdown
+            UTTypeDescription: Markdown Document
+            UTTypeConformsTo: [public.plain-text]
+            UTTypeTagSpecification:
+              public.filename-extension: [md, markdown]
+              public.mime-type: [text/markdown]
+    entitlements:
+      path: DraftWriter/DraftWriter.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-write: true
+  DraftWriterUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources: [DraftWriterUITests]
+    dependencies:
+      - target: DraftWriter
+schemes:
+  DraftWriter:
+    build:
+      targets:
+        DraftWriter: all
+    test:
+      targets: [DraftWriterUITests]
