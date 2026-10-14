@@ -3,6 +3,12 @@ import AppKit
 /// The editing surface: a TextKit 2 `NSTextView` that keeps its text in a centred column.
 final class DraftTextView: NSTextView {
     var columnWidth = 70 { didSet { updateInsets() } }
+    var typewriter = false {
+        didSet {
+            updateInsets()
+            centerCaret()
+        }
+    }
 
     var baseFont: NSFont = Theme.font(.duo, size: 17) {
         didSet {
@@ -53,9 +59,27 @@ final class DraftTextView: NSTextView {
         updateInsets()
     }
 
+    override func viewWillDraw() {
+        updateInsets()   // the visible height changes when the window is resized
+        super.viewWillDraw()
+    }
+
+    /// Typewriter scrolling: keep the caret line in the vertical middle of the window.
+    func centerCaret() {
+        guard typewriter, let scrollView = enclosingScrollView, let window else { return }
+        let caret = NSRange(location: selectedRange().location, length: 0)
+        let screenRect = firstRect(forCharacterRange: caret, actualRange: nil)
+        guard screenRect != .zero else { return }
+        let rect = convert(window.convertFromScreen(screenRect), from: nil)
+        let clip = scrollView.contentView
+        clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: max(0, rect.midY - clip.bounds.height / 2)))
+        scrollView.reflectScrolledClipView(clip)
+    }
+
     private func updateInsets() {
         let horizontal = Theme.columnInset(viewWidth: frame.width, font: baseFont, columns: columnWidth)
-        let inset = NSSize(width: horizontal, height: 40)
+        let vertical = typewriter ? ((enclosingScrollView?.contentSize.height ?? 0) / 2).rounded() : 40
+        let inset = NSSize(width: horizontal, height: vertical)
         if textContainerInset != inset { textContainerInset = inset }
     }
 }

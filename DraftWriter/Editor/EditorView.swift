@@ -8,6 +8,8 @@ struct EditorView: NSViewRepresentable {
     @Binding var selection: NSRange
     var font: NSFont
     var columnWidth: Int
+    var focusMode: FocusMode = .off
+    var typewriter = false
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -17,6 +19,7 @@ struct EditorView: NSViewRepresentable {
         textView.baseFont = font
         textView.columnWidth = columnWidth
         textView.string = text
+        textView.typewriter = typewriter
         context.coordinator.textView = textView
         context.coordinator.restyleAll()
         return scrollView
@@ -32,6 +35,8 @@ struct EditorView: NSViewRepresentable {
             needsRestyle = true
         }
         if textView.columnWidth != columnWidth { textView.columnWidth = columnWidth }
+        if textView.typewriter != typewriter { textView.typewriter = typewriter }
+        let focusChanged = coordinator.appliedFocusMode != focusMode
         if textView.string != text {
             // External change (revert, undo through the document): replace and keep the caret in range.
             let caret = min(textView.selectedRange().location, (text as NSString).length)
@@ -40,6 +45,7 @@ struct EditorView: NSViewRepresentable {
             needsRestyle = true
         }
         if needsRestyle { coordinator.restyleAll() }
+        if focusChanged || needsRestyle { coordinator.applyFocus() }
     }
 
     @MainActor
@@ -50,6 +56,7 @@ struct EditorView: NSViewRepresentable {
         weak var textView: DraftTextView?
         private var pendingRestyle: Task<Void, Never>?
         private var lastEditedRange: NSRange?
+        private(set) var appliedFocusMode: FocusMode = .off
 
         init(_ parent: EditorView) {
             self.parent = parent
@@ -72,6 +79,8 @@ struct EditorView: NSViewRepresentable {
             guard let textView else { return }
             let range = textView.selectedRange()
             if parent.selection != range { parent.selection = range }
+            applyFocus()
+            textView.centerCaret()
             // Composition just ended: catch up on styling skipped while text was marked.
             if !textView.hasMarkedText(), pendingRestyle == nil, lastEditedRange != nil { scheduleFullRestyle() }
         }
@@ -81,6 +90,30 @@ struct EditorView: NSViewRepresentable {
             let styles = MarkdownStyler.styles(for: textView.string)
             AttributeApplier.applyStyles(styles, to: storage, in: NSRange(location: 0, length: storage.length),
                                          baseFont: textView.baseFont)
+        }
+
+        /// Dims everything outside the current sentence or paragraph with a rendering attribute,
+        /// which overrides the stored colour without touching the text storage.
+        func applyFocus() {
+            guard let textView, let tlm = textView.textLayoutManager else { return }
+            appliedFocusMode = parent.focusMode
+            tlm.removeRenderingAttribute(.foregroundColor, for: tlm.documentRange)
+            guard let bright = FocusController.brightRange(in: textView.string, selection: textView.selectedRange(),
+                                                           mode: parent.focusMode) else { return }
+            let length = (textView.string as NSString).length
+            let dimmed = [NSRange(location: 0, length: bright.location),
+                          NSRange(location: NSMaxRange(bright), length: length - NSMaxRange(bright))]
+            for range in dimmed where range.length > 0 {
+                if let textRange = Self.textRange(range, in: tlm) {
+                    tlm.addRenderingAttribute(.foregroundColor, value: Theme.dimmed, for: textRange)
+                }
+            }
+        }
+
+        private static func textRange(_ range: NSRange, in tlm: NSTextLayoutManager) -> NSTextRange? {
+            guard let start = tlm.location(tlm.documentRange.location, offsetBy: range.location),
+                  let end = tlm.location(start, offsetBy: range.length) else { return nil }
+            return NSTextRange(location: start, end: end)
         }
 
         /// Fast path while typing: re-style the edited paragraph and one paragraph on each side.
