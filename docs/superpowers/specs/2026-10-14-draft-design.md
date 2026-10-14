@@ -1,17 +1,17 @@
-# Draft — design spec
+# Draft Writer — design spec
 
 Date: 2026-10-14
 Status: approved in brainstorming, awaiting spec review
 
 ## Purpose
 
-Draft is a distraction-free Markdown writing app for macOS, modelled on iA Writer. It is Manuel's
+Draft Writer is a distraction-free Markdown writing app for macOS, modelled on iA Writer. It is Manuel's
 daily writing tool first: polish and reliability on his own Mac matter more than breadth. It is open
-source (MIT) at `github.com/manuel-palacio/Draft`.
+source (MIT) at `github.com/manuel-palacio/draft-writer`.
 
 Success criteria:
 
-- Writing in Draft feels as calm as iA Writer: fixed-width centred text, iA fonts, no chrome while typing.
+- Writing in Draft Writer feels as calm as iA Writer: fixed-width centred text, iA fonts, no chrome while typing.
 - Files are always plain `.md`/`.txt` on disk; nothing is locked into a private format.
 - Typing stays smooth on a 50,000-word document.
 
@@ -69,7 +69,7 @@ mouse movement.
 - `DocumentGroup` + `MarkdownDocument` gives open/save panels, autosave, versions, Revert, window tabs,
   Open Recent and iCloud Drive.
 - Readable types: `net.daringfireball.markdown`, `public.plain-text`. New documents save as `.md`.
-- Files are decoded as UTF-8. If that fails, Draft decodes as ISO Latin-1 and shows a one-time warning
+- Files are decoded as UTF-8. If that fails, Draft Writer decodes as ISO Latin-1 and shows a one-time warning
   banner in the window; the file is saved back as UTF-8.
 - Save errors use the standard document alerts.
 
@@ -194,7 +194,7 @@ publishing to WordPress/Medium, auto-update (Sparkle), App Store distribution an
 
 ## Repository
 
-- `~/Projects/Draft`, git `main`. Public GitHub repo `manuel-palacio/Draft`, created when M1's scaffold
+- `~/Projects/draft-writer`, git `main`. Public GitHub repo `manuel-palacio/draft-writer`, created when M1's scaffold
   first builds.
 - `LICENSE` (MIT), `README.md` (build instructions, feature list, font credits),
   `Resources/Fonts/` containing the iA fonts and their `LICENSE.md`.
