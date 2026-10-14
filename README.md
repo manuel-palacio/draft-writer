@@ -20,7 +20,7 @@ Coming next: live preview, HTML/PDF export (M2); part-of-speech highlighting and
 | Shortcut | Action |
 |---|---|
 | ⌘D | Focus mode: off → sentence → paragraph |
-| ⌥⌘T | Typewriter scrolling |
+| ⇧⌘T | Typewriter scrolling |
 | ⌘, | Settings (font, size, line width, appearance) |
 
 ## Build

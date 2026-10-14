@@ -111,7 +111,7 @@ undo steps or mark the document as edited.
 
 ### Typewriter scrolling
 
-- A separate toggle (⌥⌘T; plain ⌘T is the system Show Fonts command). Keeps the line being typed vertically centred.
+- A separate toggle (⇧⌘T; ⌘T is Show Fonts and ⌥⌘T is Show Toolbar). Keeps the line being typed vertically centred.
 - Implementation: top and bottom text container insets of half the visible height; after each edit or
   selection change, scroll so the caret's line rectangle is centred.
 

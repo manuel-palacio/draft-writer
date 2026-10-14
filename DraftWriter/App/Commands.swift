@@ -10,7 +10,7 @@ struct EditorCommands: Commands {
             Button("Focus Mode: \(settings.focusMode.title)") { settings.focusMode = settings.focusMode.next }
                 .keyboardShortcut("d")
             Toggle("Typewriter Scrolling", isOn: $settings.typewriter)
-                .keyboardShortcut("t", modifiers: [.command, .option])
+                .keyboardShortcut("t", modifiers: [.command, .shift])
             Divider()
         }
     }
