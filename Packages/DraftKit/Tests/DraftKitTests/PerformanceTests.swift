@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import DraftKit
@@ -25,6 +26,13 @@ import Testing
         _ = MarkdownStyler.styles(for: text)   // warm up
         let ms = milliseconds { _ = MarkdownStyler.styles(for: text) }
         #expect(ms < 150, "styling took \(ms) ms")
+    }
+
+    /// Text read back from NSTextView is a bridged, UTF-16-backed String; it must be just as fast.
+    @Test func stylesBridgedLongDocument() {
+        let bridged = NSTextStorage(string: text).string
+        let ms = milliseconds { _ = MarkdownStyler.styles(for: bridged) }
+        #expect(ms < 150, "styling a bridged string took \(ms) ms")
     }
 
     @Test func focusLongDocument() {

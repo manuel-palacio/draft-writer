@@ -22,6 +22,10 @@ public struct StyledRange: Hashable, Sendable {
 /// Never changes the text; the editor turns these into display attributes.
 public enum MarkdownStyler {
     public static func styles(for text: String) -> [StyledRange] {
+        // Text from NSTextView is a bridged UTF-16 string, where UTF-8 offsets are O(n); a native copy
+        // makes the UTF-8 -> UTF-16 range conversion fast (9 s -> ~20 ms on 50,000 words).
+        var text = text
+        text.makeContiguousUTF8()
         var walker = StyleWalker(text: text)
         walker.visit(Document(parsing: text))
         return walker.styles
