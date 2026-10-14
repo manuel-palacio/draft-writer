@@ -10,6 +10,8 @@ struct EditorView: NSViewRepresentable {
     var columnWidth: Int
     var focusMode: FocusMode = .off
     var typewriter = false
+    /// Called with the 1-based source line at the top of the visible area when the editor scrolls.
+    var onTopLineChange: ((Int) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -21,6 +23,7 @@ struct EditorView: NSViewRepresentable {
         textView.string = text
         textView.typewriter = typewriter
         context.coordinator.textView = textView
+        context.coordinator.observeScrolling(of: scrollView)
         context.coordinator.restyleAll()
         return scrollView
     }
@@ -95,6 +98,24 @@ struct EditorView: NSViewRepresentable {
             codeBlocks = styles.filter { $0.style == .codeBlock }.map(\.range)
             AttributeApplier.applyStyles(styles, to: storage, in: NSRange(location: 0, length: storage.length),
                                          baseFont: textView.baseFont)
+        }
+
+        func observeScrolling(of scrollView: NSScrollView) {
+            scrollView.contentView.postsBoundsChangedNotifications = true
+            NotificationCenter.default.addObserver(self, selector: #selector(clipViewDidScroll),
+                                                   name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+        }
+
+        @objc private func clipViewDidScroll(_ notification: Notification) {
+            reportTopLine()
+        }
+
+        func reportTopLine() {
+            guard let report = parent.onTopLineChange, let textView else { return }
+            let visible = textView.visibleRect
+            let point = NSPoint(x: textView.textContainerInset.width + 1, y: visible.minY + textView.textContainerInset.height)
+            let index = textView.characterIndexForInsertion(at: point)
+            report(PreviewRenderer.line(atUTF16Offset: index, in: textView.string))
         }
 
         /// Dims everything outside the current sentence or paragraph with a rendering attribute,

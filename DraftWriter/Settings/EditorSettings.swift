@@ -45,6 +45,7 @@ final class EditorSettings {
     }
     var focusMode: FocusMode { didSet { store(focusMode.rawValue, "focusMode") } }
     var typewriter: Bool { didSet { store(typewriter, "typewriter") } }
+    var showPreview: Bool { didSet { store(showPreview, "showPreview") } }
 
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -56,6 +57,7 @@ final class EditorSettings {
         appearance = defaults.string(forKey: "appearance").flatMap(Appearance.init) ?? .auto
         focusMode = defaults.string(forKey: "focusMode").flatMap(FocusMode.init) ?? .off
         typewriter = defaults.bool(forKey: "typewriter")
+        showPreview = defaults.bool(forKey: "showPreview")
     }
 
     var editorFont: NSFont { Theme.font(font, size: fontSize) }
