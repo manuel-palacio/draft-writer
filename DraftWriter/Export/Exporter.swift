@@ -63,6 +63,12 @@ enum Exporter {
         return info
     }
 
+    /// The print panel is a sheet, so an interactive print must attach to a visible document window;
+    /// the offscreen window only hosts the web view.
+    static func panelWindow(interactive: Bool, offscreen: NSWindow, key: NSWindow?) -> NSWindow {
+        interactive ? (key ?? offscreen) : offscreen
+    }
+
     /// WKWebView prints asynchronously, so the operation must run modally for a window
     /// (`run()` yields blank pages). An offscreen window hosts the web view.
     private static func runPrint(_ source: ExportSource, info: NSPrintInfo, interactive: Bool) async throws {
@@ -72,20 +78,21 @@ enum Exporter {
         operation.showsPrintPanel = interactive
         operation.showsProgressPanel = interactive
         operation.view?.frame = webView.bounds
-        let succeeded = await PrintRunner().run(operation, for: page.window)
+        let host = panelWindow(interactive: interactive, offscreen: page.window, key: NSApp.keyWindow ?? NSApp.mainWindow)
+        let succeeded = await PrintRunner().run(operation, for: host)
         if !succeeded && !interactive { throw ExportError.printFailed }
     }
 }
 
 /// Loads the export page into an offscreen web view and waits for it to finish.
 @MainActor
-private final class PrintPage: NSObject, WKNavigationDelegate {
+final class PrintPage: NSObject, WKNavigationDelegate {
     let window = NSWindow(contentRect: NSRect(x: -10_000, y: -10_000, width: 800, height: 1000),
                           styleMask: [.borderless], backing: .buffered, defer: false)
     private let source: ExportSource
     private let assets = AssetSchemeHandler()
     private var continuation: CheckedContinuation<WKWebView, any Error>?
-    private var webView: WKWebView?
+    private(set) var webView: WKWebView?
 
     init(source: ExportSource) {
         self.source = source
@@ -112,6 +119,11 @@ private final class PrintPage: NSObject, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
+        continuation?.resume(throwing: ExportError.pageLoadFailed)
+        continuation = nil
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         continuation?.resume(throwing: ExportError.pageLoadFailed)
         continuation = nil
     }

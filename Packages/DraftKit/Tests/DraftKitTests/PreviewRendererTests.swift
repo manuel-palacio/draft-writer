@@ -42,6 +42,10 @@ import Testing
         #expect(PreviewRenderer.line(atUTF16Offset: 99, in: text) == 3)
     }
 
+    @Test func keepsTextAfterNUL() {
+        #expect(PreviewRenderer.body(for: "before\u{0}after").contains("after"))
+    }
+
     @Test func emptyMarkdown() {
         #expect(PreviewRenderer.body(for: "") == "")
     }

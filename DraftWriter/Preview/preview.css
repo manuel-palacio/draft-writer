@@ -26,5 +26,4 @@ th, td { border: 1px solid var(--rule); padding: .3em .7em; }
 hr { border: 0; border-top: 1px solid var(--rule); margin: 2em 0; }
 img { max-width: 100%; }
 li > input[type=checkbox] { margin-right: .4em; }
-@page { margin: 0; }
 @media print { body { padding: 0; max-width: none; } html { background: white; } }

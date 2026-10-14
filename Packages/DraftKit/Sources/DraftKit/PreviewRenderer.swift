@@ -15,7 +15,13 @@ public enum PreviewRenderer {
         for name in extensionNames {
             if let ext = cmark_find_syntax_extension(name) { cmark_parser_attach_syntax_extension(parser, ext) }
         }
-        markdown.withCString { cmark_parser_feed(parser, $0, strlen($0)) }
+        // Feed by byte count, not strlen: an embedded NUL must not cut the document short.
+        var markdown = markdown
+        markdown.withUTF8 { bytes in
+            bytes.withMemoryRebound(to: CChar.self) { chars in
+                if let base = chars.baseAddress { cmark_parser_feed(parser, base, chars.count) }
+            }
+        }
         guard let root = cmark_parser_finish(parser) else { return "" }
         defer { cmark_node_free(root) }
         guard let html = cmark_render_html(root, options, cmark_parser_get_syntax_extensions(parser)) else { return "" }

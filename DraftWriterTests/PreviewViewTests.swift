@@ -51,6 +51,13 @@ import WebKit
         override var request: URLRequest { URLRequest(url: URL(string: "https://example.com")!) }
     }
 
+    @Test func onlyWebLinksOpenExternally() {
+        #expect(PreviewView.Coordinator.opensExternally(URL(string: "https://example.com")!))
+        #expect(PreviewView.Coordinator.opensExternally(URL(string: "mailto:a@b.c")!))
+        #expect(!PreviewView.Coordinator.opensExternally(URL(string: "draft-asset://doc/#intro")!))
+        #expect(!PreviewView.Coordinator.opensExternally(URL(string: "draft-asset://doc/other.md")!))
+    }
+
     @Test func linkClicksOpenExternally() {
         #expect(PreviewView.Coordinator.policy(for: StubAction(.linkActivated)) == .cancel)
         #expect(PreviewView.Coordinator.policy(for: StubAction(.other)) == .allow)

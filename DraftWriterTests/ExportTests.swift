@@ -40,10 +40,41 @@ import Testing
         #expect(abs(box.width - 612) <= 1 && abs(box.height - 792) <= 1)
     }
 
+    @Test func pdfHasTwoCentimetreMargins() async throws {
+        let url = tempURL("pdf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try await Exporter.writePDF(source, to: url, pageSize: .a4)
+        let pdf = try #require(PDFDocument(url: url))
+        let page = try #require(pdf.page(at: 0))
+        let selection = try #require(pdf.findString("Part 1", withOptions: []).first)
+        let bounds = selection.bounds(for: page)
+        #expect(bounds.minX >= 50, "text starts at x=\(bounds.minX)")
+        #expect(bounds.maxY <= page.bounds(for: .mediaBox).height - 50, "text top at y=\(bounds.maxY)")
+    }
+
     @Test func pdfContainsText() async throws {
         let url = tempURL("pdf")
         defer { try? FileManager.default.removeItem(at: url) }
         try await Exporter.writePDF(source, to: url, pageSize: .a4)
         #expect(PDFDocument(url: url)?.string?.contains("Part 1") == true)
+    }
+}
+
+@MainActor
+@Suite struct PrintHostingTests {
+    @Test func interactivePrintUsesKeyWindow() {
+        let offscreen = NSWindow()
+        let key = NSWindow()
+        #expect(Exporter.panelWindow(interactive: true, offscreen: offscreen, key: key) === key)
+        #expect(Exporter.panelWindow(interactive: true, offscreen: offscreen, key: nil) === offscreen)
+        #expect(Exporter.panelWindow(interactive: false, offscreen: offscreen, key: key) === offscreen)
+    }
+
+    @Test func exportFailsInsteadOfHangingWhenWebProcessDies() async {
+        let page = PrintPage(source: ExportSource(markdown: "# x", title: "x", documentFolder: nil))
+        let loading = Task { try await page.load() }
+        while page.webView == nil { await Task.yield() }
+        page.webViewWebContentProcessDidTerminate(page.webView!)
+        await #expect(throws: ExportError.self) { _ = try await loading.value }
     }
 }
