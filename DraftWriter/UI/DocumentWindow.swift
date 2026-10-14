@@ -36,7 +36,7 @@ struct DocumentWindow: View {
 
     private var encodingBanner: some View {
         HStack {
-            Text("Opened as Latin-1. Draft Writer will save this file as UTF-8.")
+            Text("This file was not UTF-8. Draft Writer will save it as UTF-8.")
             Spacer()
             Button("Dismiss") { bannerDismissed = true }
         }

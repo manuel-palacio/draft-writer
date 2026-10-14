@@ -15,6 +15,18 @@ import Testing
         #expect(result.usedFallback == true)
     }
 
+    @Test func decodesWindows1252() {
+        let result = TextDecoding.decode(Data([0x93, 0x68, 0x94, 0x20, 0x80]))
+        #expect(result.text == "\u{201C}h\u{201D} €")
+        #expect(result.usedFallback == true)
+    }
+
+    @Test func decodesUTF16WithBOM() {
+        let result = TextDecoding.decode(Data([0xFF, 0xFE]) + "Hej å".data(using: .utf16LittleEndian)!)
+        #expect(result.text == "Hej å")
+        #expect(result.usedFallback == true)   // saved back as UTF-8
+    }
+
     @Test func preservesCRLF() {
         #expect(TextDecoding.decode(Data("a\r\nb".utf8)).text == "a\r\nb")
     }
