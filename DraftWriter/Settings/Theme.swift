@@ -1,4 +1,5 @@
 import AppKit
+import DraftKit
 
 enum EditorFont: String, CaseIterable, Identifiable {
     case duo, mono, quattro
@@ -53,6 +54,28 @@ enum Theme {
     static let codeBackground = dynamic(light: NSColor(white: 0, alpha: 0.05), dark: NSColor(white: 1, alpha: 0.07))
     static let background = dynamic(light: NSColor(srgbRed: 0.98, green: 0.98, blue: 0.97, alpha: 1),
                                     dark: NSColor(srgbRed: 0.11, green: 0.11, blue: 0.12, alpha: 1))
+
+    // Part-of-speech colours (light, dark). Dimmed variants keep the hue at focus-mode opacity.
+    private static let highlightHues: [LexicalClass: (light: UInt32, dark: UInt32)] = [
+        .noun: (0xC2410C, 0xF0915A), .verb: (0x2563EB, 0x7AA7F7), .adjective: (0xA16207, 0xE0B04A),
+        .adverb: (0x9333EA, 0xC08AF5), .conjunction: (0x059669, 0x4CC9A0),
+    ]
+
+    private static let highlightColors: [LexicalClass: (normal: NSColor, dimmed: NSColor)] = {
+        func rgb(_ hex: UInt32, _ alpha: CGFloat) -> NSColor {
+            NSColor(srgbRed: CGFloat(hex >> 16 & 0xFF) / 255, green: CGFloat(hex >> 8 & 0xFF) / 255,
+                     blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
+        }
+        return highlightHues.mapValues { hue in
+            (dynamic(light: rgb(hue.light, 1), dark: rgb(hue.dark, 1)),
+             dynamic(light: rgb(hue.light, 0.3), dark: rgb(hue.dark, 0.3)))
+        }
+    }()
+
+    static func highlight(_ lexicalClass: LexicalClass, dimmed: Bool) -> NSColor {
+        let colors = highlightColors[lexicalClass]!
+        return dimmed ? colors.dimmed : colors.normal
+    }
 
     private static func dynamic(light: NSColor, dark: NSColor) -> NSColor {
         NSColor(name: nil) { appearance in

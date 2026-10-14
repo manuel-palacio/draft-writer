@@ -13,7 +13,31 @@ struct EditorCommands: Commands {
                 .keyboardShortcut("t", modifiers: [.command, .shift])
             Toggle("Show Preview", isOn: $settings.showPreview)
                 .keyboardShortcut("r")
+            Toggle("Syntax Highlight", isOn: $settings.syntaxHighlight)
+                .keyboardShortcut("h", modifiers: [.command, .shift])
+            Menu("Highlight") {
+                ForEach(LexicalClass.allCases, id: \.self) { lexicalClass in
+                    Toggle(lexicalClass.title, isOn: Binding(
+                        get: { settings.highlightClasses.contains(lexicalClass) },
+                        set: { on in
+                            if on { settings.highlightClasses.insert(lexicalClass) } else { settings.highlightClasses.remove(lexicalClass) }
+                        }))
+                }
+            }
+            .disabled(!settings.syntaxHighlight)
             Divider()
+        }
+    }
+}
+
+extension LexicalClass {
+    var title: String {
+        switch self {
+        case .noun: "Nouns"
+        case .verb: "Verbs"
+        case .adjective: "Adjectives"
+        case .adverb: "Adverbs"
+        case .conjunction: "Conjunctions"
         }
     }
 }

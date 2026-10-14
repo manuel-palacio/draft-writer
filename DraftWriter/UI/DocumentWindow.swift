@@ -23,7 +23,8 @@ struct DocumentWindow: View {
             HSplitView {
                 EditorView(text: $document.text, selection: $selection,
                            font: settings.editorFont, columnWidth: settings.columnWidth,
-                           focusMode: settings.focusMode, typewriter: settings.typewriter,
+                           focusMode: settings.focusMode, highlightClasses: settings.activeHighlightClasses,
+                           typewriter: settings.typewriter,
                            onTopLineChange: settings.showPreview ? { topLine = $0 } : nil)
                     .frame(minWidth: 360)
                 if settings.showPreview {

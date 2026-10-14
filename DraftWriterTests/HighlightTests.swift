@@ -1,0 +1,65 @@
+import AppKit
+import DraftKit
+import Testing
+@testable import Draft_Writer
+
+@MainActor
+@Suite struct HighlightTests {
+    func renderingColor(_ h: EditorHarness, at location: Int) -> NSColor? {
+        guard let tlm = h.textView.textLayoutManager,
+              let start = tlm.location(tlm.documentRange.location, offsetBy: location) else { return nil }
+        var color: NSColor?
+        tlm.enumerateRenderingAttributes(from: start, reverse: false) { _, attributes, range in
+            if range.contains(start) { color = attributes[.foregroundColor] as? NSColor }
+            return false
+        }
+        return color
+    }
+
+    func offset(of word: String, in h: EditorHarness) -> Int {
+        (h.textView.string as NSString).range(of: word).location
+    }
+
+    func harness(_ text: String, classes: Set<LexicalClass> = Set(LexicalClass.allCases)) -> EditorHarness {
+        let h = EditorHarness(initial: text)
+        h.coordinator.parent.highlightClasses = classes
+        h.coordinator.applyRenderingColors()
+        return h
+    }
+
+    @Test func highlightsColourWords() {
+        let h = harness("The quick fox jumps over the dog.")
+        #expect(renderingColor(h, at: offset(of: "fox", in: h)) === Theme.highlight(.noun, dimmed: false))
+        #expect(renderingColor(h, at: offset(of: "jumps", in: h)) === Theme.highlight(.verb, dimmed: false))
+    }
+
+    @Test func focusKeepsHue() {
+        let h = EditorHarness(initial: "One fox sleeps here. Two dogs run there.")
+        h.coordinator.parent.highlightClasses = Set(LexicalClass.allCases)
+        h.coordinator.parent.focusMode = .sentence
+        h.textView.setSelectedRange(NSRange(location: offset(of: "dogs", in: h), length: 0))
+        h.coordinator.applyRenderingColors()
+        #expect(renderingColor(h, at: offset(of: "fox", in: h)) === Theme.highlight(.noun, dimmed: true))
+        #expect(renderingColor(h, at: offset(of: "dogs", in: h)) === Theme.highlight(.noun, dimmed: false))
+        #expect(renderingColor(h, at: offset(of: "One", in: h)) === Theme.dimmed)
+    }
+
+    @Test func codeIsNotHighlighted() {
+        let h = harness("Use the `fox` command now, quickly.")
+        #expect(renderingColor(h, at: offset(of: "fox", in: h)) == nil)
+        #expect(renderingColor(h, at: offset(of: "command", in: h)) != nil)
+    }
+
+    @Test func disabledClassIsPlain() {
+        let h = harness("The quick fox jumps over the dog.", classes: [.verb])
+        #expect(renderingColor(h, at: offset(of: "fox", in: h)) == nil)
+        #expect(renderingColor(h, at: offset(of: "jumps", in: h)) === Theme.highlight(.verb, dimmed: false))
+    }
+
+    @Test func highlightingOffClearsColours() {
+        let h = harness("The quick fox jumps over the dog.")
+        h.coordinator.parent.highlightClasses = []
+        h.coordinator.applyRenderingColors()
+        #expect(renderingColor(h, at: offset(of: "fox", in: h)) == nil)
+    }
+}

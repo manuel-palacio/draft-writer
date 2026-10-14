@@ -47,6 +47,11 @@ final class EditorSettings {
     var typewriter: Bool { didSet { store(typewriter, "typewriter") } }
     var showPreview: Bool { didSet { store(showPreview, "showPreview") } }
     var pageSize: PageSize { didSet { store(pageSize.rawValue, "pageSize") } }
+    var syntaxHighlight: Bool { didSet { store(syntaxHighlight, "syntaxHighlight") } }
+    var highlightClasses: Set<LexicalClass> { didSet { store(highlightClasses.map(\.rawValue).sorted(), "highlightClasses") } }
+
+    /// The classes the editor should colour right now (empty when highlighting is off).
+    var activeHighlightClasses: Set<LexicalClass> { syntaxHighlight ? highlightClasses : [] }
 
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -60,6 +65,9 @@ final class EditorSettings {
         typewriter = defaults.bool(forKey: "typewriter")
         showPreview = defaults.bool(forKey: "showPreview")
         pageSize = defaults.string(forKey: "pageSize").flatMap(PageSize.init) ?? .a4
+        syntaxHighlight = defaults.bool(forKey: "syntaxHighlight")
+        highlightClasses = (defaults.stringArray(forKey: "highlightClasses")).map { Set($0.compactMap(LexicalClass.init)) }
+            ?? Set(LexicalClass.allCases)
     }
 
     var editorFont: NSFont { Theme.font(font, size: fontSize) }
