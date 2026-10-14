@@ -12,6 +12,7 @@ settings:
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: YES
 targets:
   DraftWriter:
     type: application
@@ -58,6 +59,17 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.files.user-selected.read-write: true
+  DraftWriterTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [DraftWriterTests]
+    settings:
+      base:
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Draft Writer.app/Contents/MacOS/Draft Writer"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+    dependencies:
+      - target: DraftWriter
+      - package: DraftKit
   DraftWriterUITests:
     type: bundle.ui-testing
     platform: macOS
@@ -70,4 +82,4 @@ schemes:
       targets:
         DraftWriter: all
     test:
-      targets: [DraftWriterUITests]
+      targets: [DraftWriterTests, DraftWriterUITests]
