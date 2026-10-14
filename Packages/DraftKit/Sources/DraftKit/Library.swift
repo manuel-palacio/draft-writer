@@ -1,0 +1,120 @@
+import Foundation
+
+public struct LibraryItem: Identifiable, Hashable, Sendable {
+    public let url: URL
+    public let name: String
+    public let isFolder: Bool
+    public let modified: Date
+    /// Folder contents; nil for files (so `OutlineGroup` shows no disclosure triangle).
+    public var children: [LibraryItem]?
+    public var id: URL { url }
+}
+
+public enum LibrarySort: String, CaseIterable, Sendable {
+    case modified, name
+}
+
+public enum LibraryError: LocalizedError {
+    case invalidName(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidName(let name): "“\(name)” is not a valid file name."
+        }
+    }
+}
+
+/// File operations for the library sidebar: one root folder of Markdown and text notes.
+public enum Library {
+    public static let fileExtensions: Set<String> = ["md", "markdown", "txt"]
+    public static let maxSearchFileSize = 5_000_000
+    private static let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .contentModificationDateKey, .fileSizeKey]
+
+    /// The tree under `root`: notes, and the folders that contain notes at any depth. Folders first.
+    public static func scan(_ root: URL, sort: LibrarySort) throws -> [LibraryItem] {
+        let urls = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: keys, options: .skipsHiddenFiles)
+        var folders: [LibraryItem] = []
+        var files: [LibraryItem] = []
+        for url in urls {
+            let values = try url.resourceValues(forKeys: Set(keys))
+            let modified = values.contentModificationDate ?? .distantPast
+            if values.isDirectory == true, values.isPackage != true {
+                let children = try scan(url, sort: sort)
+                if !children.isEmpty {
+                    folders.append(LibraryItem(url: url, name: url.lastPathComponent, isFolder: true, modified: modified, children: children))
+                }
+            } else if isNote(url) {
+                files.append(LibraryItem(url: url, name: url.lastPathComponent, isFolder: false, modified: modified, children: nil))
+            }
+        }
+        return sorted(folders, by: sort) + sorted(files, by: sort)
+    }
+
+    /// Notes whose name contains `query`, then notes whose text does (case- and diacritic-insensitive).
+    /// Files larger than `maxSearchFileSize` are matched by name only.
+    public static func search(_ root: URL, query: String) throws -> [URL] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return [] }
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        var byName: [URL] = []
+        var byContent: [URL] = []
+        let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys,
+                                                        options: [.skipsHiddenFiles, .skipsPackageDescendants])
+        while let url = enumerator?.nextObject() as? URL {
+            try Task.checkCancellation()   // a newer query replaced this search
+            guard isNote(url) else { continue }
+            if url.deletingPathExtension().lastPathComponent.range(of: needle, options: options) != nil {
+                byName.append(url)
+            } else if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= maxSearchFileSize,
+                      let data = try? Data(contentsOf: url),
+                      TextDecoding.decode(data).text.range(of: needle, options: options) != nil {
+                byContent.append(url)
+            }
+        }
+        let byPath = { (a: URL, b: URL) in a.path.localizedStandardCompare(b.path) == .orderedAscending }
+        return byName.sorted(by: byPath) + byContent.sorted(by: byPath)
+    }
+
+    /// Creates an empty `Untitled.md` (or `Untitled 2.md`, …) in `folder`, never overwriting.
+    public static func createUntitled(in folder: URL) throws -> URL {
+        var number = 1
+        while true {
+            let name = number == 1 ? "Untitled.md" : "Untitled \(number).md"
+            let url = folder.appending(path: name)
+            do {
+                try Data().write(to: url, options: .withoutOverwriting)
+                return url
+            } catch CocoaError.fileWriteFileExists {
+                number += 1
+            }
+        }
+    }
+
+    /// Renames in place; keeps the original extension when `newName` has none. Never replaces a file.
+    public static func rename(_ url: URL, to newName: String) throws -> URL {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains("/"), !trimmed.hasPrefix(".") else { throw LibraryError.invalidName(newName) }
+        // "Meeting 2026.10.14" has the "extension" 14: keep the note's own extension unless the new
+        // name ends in one the library recognises.
+        let typed = (trimmed as NSString).pathExtension.lowercased()
+        let name = fileExtensions.contains(typed) || url.pathExtension.isEmpty ? trimmed : "\(trimmed).\(url.pathExtension)"
+        let destination = url.deletingLastPathComponent().appending(path: name)
+        try FileManager.default.moveItem(at: url, to: destination)   // throws if the destination exists
+        return destination
+    }
+
+    public static func trash(_ url: URL) throws {
+        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+    }
+
+    static func isNote(_ url: URL) -> Bool {
+        fileExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    private static func sorted(_ items: [LibraryItem], by sort: LibrarySort) -> [LibraryItem] {
+        switch sort {
+        case .modified: items.sorted { $0.modified > $1.modified }
+        case .name: items.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        }
+    }
+}

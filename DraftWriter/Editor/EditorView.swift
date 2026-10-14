@@ -1,5 +1,6 @@
 import AppKit
 import DraftKit
+import NaturalLanguage
 import SwiftUI
 
 /// Hosts `DraftTextView` in SwiftUI and keeps it in sync with the document text.
@@ -9,6 +10,8 @@ struct EditorView: NSViewRepresentable {
     var font: NSFont
     var columnWidth: Int
     var focusMode: FocusMode = .off
+    /// Part-of-speech classes to colour; empty turns highlighting off.
+    var highlightClasses: Set<LexicalClass> = []
     var typewriter = false
     /// Called with the 1-based source line at the top of the visible area when the editor scrolls.
     var onTopLineChange: ((Int) -> Void)? = nil
@@ -39,7 +42,7 @@ struct EditorView: NSViewRepresentable {
         }
         if textView.columnWidth != columnWidth { textView.columnWidth = columnWidth }
         if textView.typewriter != typewriter { textView.typewriter = typewriter }
-        let focusChanged = coordinator.appliedFocusMode != focusMode
+        let focusChanged = coordinator.appliedFocusMode != focusMode || coordinator.appliedHighlightClasses != highlightClasses
         if textView.string != text {
             // External change (revert, undo through the document): replace and keep the caret in range.
             let caret = min(textView.selectedRange().location, (text as NSString).length)
@@ -63,6 +66,11 @@ struct EditorView: NSViewRepresentable {
         /// Fenced code blocks from the last full pass, shifted as text is edited, so the fast path
         /// can re-parse a whole block instead of a fragment that loses its fences.
         private var codeBlocks: [NSRange] = []
+        /// Inline code and code blocks from the last full pass; never highlighted.
+        private var codeRanges: [NSRange] = []
+        private(set) var appliedHighlightClasses: Set<LexicalClass> = []
+        private let highlighter = SyntaxHighlighter()
+        private static var requestedLanguages: Set<NLLanguage> = []
 
         init(_ parent: EditorView) {
             self.parent = parent
@@ -96,6 +104,7 @@ struct EditorView: NSViewRepresentable {
             guard let textView, let storage = textView.textStorage else { return }
             let styles = MarkdownStyler.styles(for: textView.string)
             codeBlocks = styles.filter { $0.style == .codeBlock }.map(\.range)
+            codeRanges = styles.filter { $0.style == .codeBlock || $0.style == .inlineCode }.map(\.range)
             AttributeApplier.applyStyles(styles, to: storage, in: NSRange(location: 0, length: storage.length),
                                          baseFont: textView.baseFont)
         }
@@ -108,6 +117,7 @@ struct EditorView: NSViewRepresentable {
 
         @objc private func clipViewDidScroll(_ notification: Notification) {
             reportTopLine()
+            if !parent.highlightClasses.isEmpty { applyRenderingColors() }
         }
 
         func reportTopLine() {
@@ -118,21 +128,65 @@ struct EditorView: NSViewRepresentable {
             report(PreviewRenderer.line(atUTF16Offset: index, in: textView.string))
         }
 
-        /// Dims everything outside the current sentence or paragraph with a rendering attribute,
-        /// which overrides the stored colour without touching the text storage.
-        func applyFocus() {
+        /// Kept for callers that only think about focus; colours are applied together.
+        func applyFocus() { applyRenderingColors() }
+
+        /// Applies every colour that is display-only, as TextKit 2 rendering attributes (which override the
+        /// stored colour without touching the text storage): focus dimming, then part-of-speech highlights.
+        /// Highlighted words outside the focused range keep their hue at reduced opacity.
+        func applyRenderingColors() {
             guard let textView, let tlm = textView.textLayoutManager else { return }
             appliedFocusMode = parent.focusMode
+            appliedHighlightClasses = parent.highlightClasses
+            let text = textView.string
+            let length = (text as NSString).length
             tlm.removeRenderingAttribute(.foregroundColor, for: tlm.documentRange)
-            guard let bright = FocusController.brightRange(in: textView.string, selection: textView.selectedRange(),
-                                                           mode: parent.focusMode) else { return }
+
+            let bright = FocusController.brightRange(in: text, selection: textView.selectedRange(), mode: parent.focusMode)
+            if let bright {
+                let dimmed = [NSRange(location: 0, length: bright.location),
+                              NSRange(location: NSMaxRange(bright), length: length - NSMaxRange(bright))]
+                for range in dimmed where range.length > 0 { setColor(Theme.dimmed, range, tlm) }
+            }
+
+            guard !parent.highlightClasses.isEmpty else { return }
+            let visible = visibleRangeWithMargin()
+            requestLanguageModelIfNeeded(for: (text as NSString).substring(with: visible))
+            for highlight in highlighter.highlights(in: text, range: visible, excluding: codeRanges)
+            where parent.highlightClasses.contains(highlight.lexicalClass) {
+                let isDimmed = bright.map { NSIntersectionRange($0, highlight.range).length == 0 } ?? false
+                setColor(Theme.highlight(highlight.lexicalClass, dimmed: isDimmed), highlight.range, tlm)
+            }
+        }
+
+        private func setColor(_ color: NSColor, _ range: NSRange, _ tlm: NSTextLayoutManager) {
+            if let textRange = Self.textRange(range, in: tlm) {
+                tlm.addRenderingAttribute(.foregroundColor, value: color, for: textRange)
+            }
+        }
+
+        /// The visible text plus one screen above and below.
+        private func visibleRangeWithMargin() -> NSRange {
+            guard let textView else { return NSRange() }
+            let visible = textView.visibleRect
+            let x = textView.textContainerInset.width + 1
+            let top = textView.characterIndexForInsertion(at: NSPoint(x: x, y: max(0, visible.minY - visible.height)))
+            let bottom = textView.characterIndexForInsertion(at: NSPoint(x: textView.bounds.maxX - x,
+                                                                         y: visible.maxY + visible.height))
             let length = (textView.string as NSString).length
-            let dimmed = [NSRange(location: 0, length: bright.location),
-                          NSRange(location: NSMaxRange(bright), length: length - NSMaxRange(bright))]
-            for range in dimmed where range.length > 0 {
-                if let textRange = Self.textRange(range, in: tlm) {
-                    tlm.addRenderingAttribute(.foregroundColor, value: Theme.dimmed, for: textRange)
-                }
+            let lower = min(top, length)
+            return NSRange(location: lower, length: max(0, min(max(bottom, lower), length) - lower))
+        }
+
+        /// Asks NaturalLanguage once per language per launch to download a missing tagging model,
+        /// then re-colours. Languages Apple has no model for (e.g. Swedish) simply stay uncoloured.
+        private func requestLanguageModelIfNeeded(for text: String) {
+            guard let language = SyntaxHighlighter.needsAssets(text),
+                  !Self.requestedLanguages.contains(language) else { return }
+            Self.requestedLanguages.insert(language)
+            NLTagger.requestAssets(for: language, tagScheme: .lexicalClass) { [weak self] result, _ in
+                guard result == .available else { return }
+                Task { @MainActor in self?.applyRenderingColors() }
             }
         }
 
@@ -159,8 +213,13 @@ struct EditorView: NSViewRepresentable {
         }
 
         private func shiftCodeBlocks(replacing edited: NSRange, with newLength: Int) {
+            codeBlocks = Self.shift(codeBlocks, replacing: edited, with: newLength)
+            codeRanges = Self.shift(codeRanges, replacing: edited, with: newLength)
+        }
+
+        private static func shift(_ ranges: [NSRange], replacing edited: NSRange, with newLength: Int) -> [NSRange] {
             let delta = newLength - edited.length
-            codeBlocks = codeBlocks.map { block in
+            return ranges.map { block in
                 if block.location >= NSMaxRange(edited) {
                     NSRange(location: block.location + delta, length: block.length)
                 } else if NSMaxRange(block) >= edited.location {
@@ -180,6 +239,7 @@ struct EditorView: NSViewRepresentable {
                 if self.textView?.hasMarkedText() == true { return }
                 self.lastEditedRange = nil
                 self.restyleAll()
+                self.applyRenderingColors()   // code ranges are fresh now
             }
         }
     }

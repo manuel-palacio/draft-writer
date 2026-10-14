@@ -16,25 +16,31 @@ struct DocumentWindow: View {
     @State private var topLine = 1
 
     var body: some View {
-        VStack(spacing: 0) {
-            if document.openedWithFallbackEncoding && !bannerDismissed {
-                encodingBanner
-            }
-            HSplitView {
-                EditorView(text: $document.text, selection: $selection,
-                           font: settings.editorFont, columnWidth: settings.columnWidth,
-                           focusMode: settings.focusMode, typewriter: settings.typewriter,
-                           onTopLineChange: settings.showPreview ? { topLine = $0 } : nil)
-                    .frame(minWidth: 360)
-                if settings.showPreview {
-                    PreviewView(markdown: document.text, documentFolder: fileURL?.deletingLastPathComponent(),
-                                topLine: topLine)
-                        .frame(minWidth: 320)
+        NavigationSplitView(columnVisibility: libraryVisibility) {
+            LibrarySidebar(store: LibraryStore.shared)
+                .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 400)
+        } detail: {
+            VStack(spacing: 0) {
+                if document.openedWithFallbackEncoding && !bannerDismissed {
+                    encodingBanner
                 }
+                HSplitView {
+                    EditorView(text: $document.text, selection: $selection,
+                               font: settings.editorFont, columnWidth: settings.columnWidth,
+                               focusMode: settings.focusMode, highlightClasses: settings.activeHighlightClasses,
+                               typewriter: settings.typewriter,
+                               onTopLineChange: settings.showPreview ? { topLine = $0 } : nil)
+                        .frame(minWidth: 360)
+                    if settings.showPreview {
+                        PreviewView(markdown: document.text, documentFolder: fileURL?.deletingLastPathComponent(),
+                                    topLine: topLine)
+                            .frame(minWidth: 320)
+                    }
+                }
+                StatsFooter(stats: stats)
+                    .padding(.vertical, 6)
+                    .opacity(isTyping ? 0 : 1)
             }
-            StatsFooter(stats: stats)
-                .padding(.vertical, 6)
-                .opacity(isTyping ? 0 : 1)
         }
         .frame(minWidth: 480, minHeight: 320)
         .background(Color(nsColor: Theme.background))
@@ -45,6 +51,12 @@ struct DocumentWindow: View {
         .focusedSceneValue(\.exportSource, ExportSource(markdown: document.text, title: title,
                                                          documentFolder: fileURL?.deletingLastPathComponent()))
         .task(id: StatsInput(text: document.text, selection: selection)) { await updateStats() }
+    }
+
+    /// ⌘1 / View > Show Library, kept in sync with the sidebar's own toggle button.
+    private var libraryVisibility: Binding<NavigationSplitViewVisibility> {
+        Binding(get: { settings.showLibrary ? .all : .detailOnly },
+                set: { settings.showLibrary = $0 != .detailOnly })
     }
 
     private var title: String {

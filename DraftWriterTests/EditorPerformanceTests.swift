@@ -1,4 +1,5 @@
 import AppKit
+import DraftKit
 import Foundation
 import Testing
 @testable import Draft_Writer
@@ -22,6 +23,15 @@ import Testing
         let h = EditorHarness(initial: Self.longText)
         let ms = milliseconds { h.coordinator.restyleAll() }
         #expect(ms < 1000, "full restyle took \(ms) ms")
+    }
+
+    @Test func typingInLongDocumentWithHighlighting() {
+        let h = EditorHarness(initial: Self.longText)
+        h.coordinator.parent.highlightClasses = Set(LexicalClass.allCases)
+        h.textView.setSelectedRange(NSRange(location: (Self.longText as NSString).length / 2, length: 0))
+        h.coordinator.applyRenderingColors()   // warm the paragraph cache, as scrolling there would
+        let ms = milliseconds { h.type("x") }
+        #expect(ms < 50, "one keystroke with highlighting took \(ms) ms")
     }
 
     @Test func typingInLongDocument() {
