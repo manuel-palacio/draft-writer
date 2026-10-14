@@ -34,12 +34,25 @@ enum AttributeApplier {
         case .link:
             storage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: r)
             storage.addAttribute(.underlineColor, value: Theme.marker, range: r)
-        case .linkDestination, .listMarker, .syntaxMarker:
+        case .listMarker:
+            storage.addAttribute(.foregroundColor, value: Theme.marker, range: r)
+            applyHangingIndent(after: r, in: storage, baseFont: baseFont)
+        case .linkDestination, .syntaxMarker:
             storage.addAttribute(.foregroundColor, value: Theme.marker, range: r)
             storage.removeAttribute(.underlineStyle, range: r)
         case .blockQuote:
             break
         }
+    }
+
+    /// Wrapped lines of a list item line up with its text, not with the marker.
+    private static func applyHangingIndent(after marker: NSRange, in storage: NSTextStorage, baseFont: NSFont) {
+        let ns = storage.string as NSString
+        let prefix = ns.substring(with: marker) + " "
+        let style = NSMutableParagraphStyle()
+        style.lineHeightMultiple = Theme.lineHeightMultiple
+        style.headIndent = (prefix as NSString).size(withAttributes: [.font: baseFont]).width
+        storage.addAttribute(.paragraphStyle, value: style, range: ns.paragraphRange(for: marker))
     }
 
     // MARK: Fonts

@@ -57,6 +57,9 @@ struct EditorView: NSViewRepresentable {
         private var pendingRestyle: Task<Void, Never>?
         private var lastEditedRange: NSRange?
         private(set) var appliedFocusMode: FocusMode = .off
+        /// Fenced code blocks from the last full pass, shifted as text is edited, so the fast path
+        /// can re-parse a whole block instead of a fragment that loses its fences.
+        private var codeBlocks: [NSRange] = []
 
         init(_ parent: EditorView) {
             self.parent = parent
@@ -64,6 +67,7 @@ struct EditorView: NSViewRepresentable {
 
         func textView(_ textView: NSTextView, shouldChangeTextIn range: NSRange, replacementString: String?) -> Bool {
             lastEditedRange = NSRange(location: range.location, length: (replacementString as NSString?)?.length ?? 0)
+            shiftCodeBlocks(replacing: range, with: lastEditedRange!.length)
             return true
         }
 
@@ -88,6 +92,7 @@ struct EditorView: NSViewRepresentable {
         func restyleAll() {
             guard let textView, let storage = textView.textStorage else { return }
             let styles = MarkdownStyler.styles(for: textView.string)
+            codeBlocks = styles.filter { $0.style == .codeBlock }.map(\.range)
             AttributeApplier.applyStyles(styles, to: storage, in: NSRange(location: 0, length: storage.length),
                                          baseFont: textView.baseFont)
         }
@@ -123,10 +128,26 @@ struct EditorView: NSViewRepresentable {
             var range = ns.paragraphRange(for: NSIntersectionRange(edited, NSRange(location: 0, length: ns.length)))
             if range.location > 0 { range = NSUnionRange(range, ns.paragraphRange(for: NSRange(location: range.location - 1, length: 0))) }
             if NSMaxRange(range) < ns.length { range = NSUnionRange(range, ns.paragraphRange(for: NSRange(location: NSMaxRange(range), length: 0))) }
+            for block in codeBlocks where block.location <= NSMaxRange(range) && range.location <= NSMaxRange(block) {
+                range = NSUnionRange(range, ns.paragraphRange(for: NSIntersectionRange(block, NSRange(location: 0, length: ns.length))))
+            }
             let styles = MarkdownStyler.styles(for: ns.substring(with: range)).map {
                 StyledRange(range: NSRange(location: $0.range.location + range.location, length: $0.range.length), style: $0.style)
             }
             AttributeApplier.applyStyles(styles, to: storage, in: range, baseFont: textView.baseFont)
+        }
+
+        private func shiftCodeBlocks(replacing edited: NSRange, with newLength: Int) {
+            let delta = newLength - edited.length
+            codeBlocks = codeBlocks.map { block in
+                if block.location >= NSMaxRange(edited) {
+                    NSRange(location: block.location + delta, length: block.length)
+                } else if NSMaxRange(block) >= edited.location {
+                    NSRange(location: block.location, length: max(0, block.length + delta))
+                } else {
+                    block
+                }
+            }
         }
 
         private func scheduleFullRestyle() {
