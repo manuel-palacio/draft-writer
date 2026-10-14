@@ -12,8 +12,10 @@ Your files stay plain `.md` text: Draft Writer only changes how they look while 
 - Typewriter scrolling: the line you type stays in the middle of the window
 - Word count, character count and reading time (for the selection when there is one)
 - Light, dark and automatic appearance
+- Live preview beside the editor that follows your scrolling (GitHub-flavoured Markdown: tables, task lists, strikethrough)
+- Export to self-contained HTML or paginated PDF (A4 or US Letter), and print
 
-Coming next: live preview, HTML/PDF export (M2); part-of-speech highlighting and a library sidebar (M3).
+Coming next: part-of-speech highlighting and a library sidebar (M3).
 
 ## Shortcuts
 
@@ -21,6 +23,9 @@ Coming next: live preview, HTML/PDF export (M2); part-of-speech highlighting and
 |---|---|
 | ⌘D | Focus mode: off → sentence → paragraph |
 | ⇧⌘T | Typewriter scrolling |
+| ⌘R | Show or hide the preview |
+| ⇧⌘E | Export as HTML |
+| ⌘P | Print |
 | ⌘, | Settings (font, size, line width, appearance) |
 
 ## Build
@@ -32,6 +37,10 @@ Requires macOS 15+ and Xcode 26+.
     open DraftWriter.xcodeproj
 
 The Xcode project is generated from `project.yml` and is not committed.
+
+Relative images (`![](img/photo.png)`) appear in the preview only when Draft Writer may read the
+document's folder (the sandbox grants access to the open file itself, not its neighbours).
+Raw HTML in documents is not rendered.
 
 ## Tests
 

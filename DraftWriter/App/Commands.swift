@@ -11,6 +11,8 @@ struct EditorCommands: Commands {
                 .keyboardShortcut("d")
             Toggle("Typewriter Scrolling", isOn: $settings.typewriter)
                 .keyboardShortcut("t", modifiers: [.command, .shift])
+            Toggle("Show Preview", isOn: $settings.showPreview)
+                .keyboardShortcut("r")
             Divider()
         }
     }

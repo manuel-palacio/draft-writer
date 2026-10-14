@@ -14,9 +14,12 @@ struct DraftWriterApp: App {
 
     var body: some Scene {
         DocumentGroup(newDocument: MarkdownDocument()) { file in
-            DocumentWindow(document: file.$document, settings: settings)
+            DocumentWindow(document: file.$document, fileURL: file.fileURL, settings: settings)
         }
-        .commands { EditorCommands(settings: settings) }
+        .commands {
+            EditorCommands(settings: settings)
+            ExportCommands(settings: settings)
+        }
         Settings {
             SettingsView(settings: settings)
                 .onAppear { NSApp.appearance = settings.appearance.nsAppearance }

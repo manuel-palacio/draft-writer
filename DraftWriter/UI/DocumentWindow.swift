@@ -7,20 +7,31 @@ struct DocumentWindow: View {
     static let statsDelay: Duration = .milliseconds(300)
 
     @Binding var document: MarkdownDocument
+    let fileURL: URL?
     @Bindable var settings: EditorSettings
     @State private var selection = NSRange(location: 0, length: 0)
     @State private var stats = TextStats(words: 0, characters: 0, readingMinutes: 0)
     @State private var isTyping = false
     @State private var bannerDismissed = false
+    @State private var topLine = 1
 
     var body: some View {
         VStack(spacing: 0) {
             if document.openedWithFallbackEncoding && !bannerDismissed {
                 encodingBanner
             }
-            EditorView(text: $document.text, selection: $selection,
-                       font: settings.editorFont, columnWidth: settings.columnWidth,
-                       focusMode: settings.focusMode, typewriter: settings.typewriter)
+            HSplitView {
+                EditorView(text: $document.text, selection: $selection,
+                           font: settings.editorFont, columnWidth: settings.columnWidth,
+                           focusMode: settings.focusMode, typewriter: settings.typewriter,
+                           onTopLineChange: settings.showPreview ? { topLine = $0 } : nil)
+                    .frame(minWidth: 360)
+                if settings.showPreview {
+                    PreviewView(markdown: document.text, documentFolder: fileURL?.deletingLastPathComponent(),
+                                topLine: topLine)
+                        .frame(minWidth: 320)
+                }
+            }
             StatsFooter(stats: stats)
                 .padding(.vertical, 6)
                 .opacity(isTyping ? 0 : 1)
@@ -31,7 +42,13 @@ struct DocumentWindow: View {
         .toolbarVisibility(isTyping ? .hidden : .automatic, for: .windowToolbar)
         .onContinuousHover { _ in if isTyping { isTyping = false } }
         .onChange(of: document.text) { isTyping = true }
+        .focusedSceneValue(\.exportSource, ExportSource(markdown: document.text, title: title,
+                                                         documentFolder: fileURL?.deletingLastPathComponent()))
         .task(id: StatsInput(text: document.text, selection: selection)) { await updateStats() }
+    }
+
+    private var title: String {
+        fileURL?.deletingPathExtension().lastPathComponent ?? "Untitled"
     }
 
     private var encodingBanner: some View {
