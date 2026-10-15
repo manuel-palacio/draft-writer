@@ -27,30 +27,32 @@ enum PreviewAssets {
     /// Stylesheet for the live preview: every family from the app bundle (loaded on use, so the font can be
     /// switched in place via `--body-font`), body text in `font`, follows light/dark appearance.
     static func previewCSS(font: EditorFont = .duo, bundle: Bundle = .main) -> String {
-        stylesheet(font: font, faces: faces(EditorFont.allCases), bundle: bundle, dark: darkColors) {
-            "url(\"draft-asset://app/fonts/\($0)\")"
-        }
+        let css = stylesheet(bodyFont: "var(--body-font, \"\(EditorFont.duo.cssFamily)\")", faces: faces(EditorFont.allCases),
+                             bundle: bundle, dark: darkColors) { "url(\"draft-asset://app/fonts/\($0)\")" }
+        return css + "\n:root { --body-font: \"\(font.cssFamily)\"; }"
     }
 
-    /// Stylesheet for exported HTML/PDF: body text in `font`; only that family and Mono (for code) are
-    /// inlined as data URIs; always light.
-    static func exportCSS(font: EditorFont = .duo, bundle: Bundle = .main) -> String {
-        let fonts = font == .mono ? [EditorFont.mono] : [font, .mono]
-        return stylesheet(font: font, faces: faces(fonts), bundle: bundle, dark: "") { file in
+    /// Stylesheet for exported HTML/PDF: body text in `font`, named directly (exports may be opened by tools
+    /// that drop custom properties). Only that family, and Mono when the document has code, are inlined as
+    /// data URIs; always light.
+    static func exportCSS(font: EditorFont = .duo, includesCode: Bool = true, bundle: Bundle = .main) -> String {
+        let fonts = Array(Set([font] + (includesCode ? [.mono] : []))).sorted { $0.rawValue < $1.rawValue }
+        return stylesheet(bodyFont: "\"\(font.cssFamily)\"", faces: faces(fonts), bundle: bundle, dark: "") { file in
             guard let url = bundle.url(forResource: file, withExtension: nil, subdirectory: "Fonts"),
                   let data = try? Data(contentsOf: url) else { return "local(\"\(file)\")" }
             return "url(\"data:font/ttf;base64,\(data.base64EncodedString())\")"
         }
     }
 
-    private static func stylesheet(font: EditorFont, faces: [(family: String, file: String, weight: String, style: String)],
+    private static func stylesheet(bodyFont: String, faces: [(family: String, file: String, weight: String, style: String)],
                                    bundle: Bundle, dark: String, source: (String) -> String) -> String {
         let template = bundle.url(forResource: "preview", withExtension: "css")
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
         let fontFaces = faces.map {
             "@font-face { font-family: \"\($0.family)\"; src: \(source($0.file)); font-weight: \($0.weight); font-style: \($0.style); }"
-        }.joined(separator: "\n") + "\n:root { --body-font: \"\(font.cssFamily)\"; }"
+        }.joined(separator: "\n")
         return template
+            .replacingOccurrences(of: "/*{{body-font}}*/", with: bodyFont)
             .replacingOccurrences(of: "/*{{font-face}}*/", with: fontFaces)
             .replacingOccurrences(of: "/*{{dark}}*/", with: dark)
     }

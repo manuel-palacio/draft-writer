@@ -65,6 +65,8 @@ The Xcode project is generated from `project.yml` and is not committed.
 
 Relative images (`![](img/photo.png)`) appear in the preview and exports for notes inside your library
 folder. For files elsewhere, the sandbox only grants access to the open file itself, not its neighbours.
+Images reached through a symlink that points outside the note's folder are not shown: the preview only
+loads files that really live inside it.
 Raw HTML in documents is not rendered.
 
 ## Tests

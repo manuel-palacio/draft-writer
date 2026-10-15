@@ -66,6 +66,29 @@ import WebKit
         #expect(try await text(preview, "#content h1") == "Lighter")
     }
 
+    @Test func fontChangeDuringFirstLoadApplies() async throws {
+        let preview = PreviewView.Coordinator()
+        preview.show(markdown: "Hello")
+        preview.font = .mono   // the page is still loading with Duo's CSS
+        await preview.waitUntilLoaded()
+        let family = try await preview.webView.evaluateJavaScript("getComputedStyle(document.body).fontFamily") as? String
+        #expect(family?.contains("iA Writer Mono") == true)
+    }
+
+    @Test func keepsScrollPositionAcrossCrashReload() async throws {
+        let preview = PreviewView.Coordinator()
+        preview.webView.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
+        let markdown = (1...200).map { "Paragraph \($0)" }.joined(separator: "\n\n")
+        preview.lastMarkdown = markdown
+        preview.show(markdown: markdown)
+        await preview.waitUntilLoaded()
+        preview.scroll(toLine: 201)
+        preview.webViewWebContentProcessDidTerminate(preview.webView)
+        await preview.waitUntilLoaded()
+        let y = try await preview.webView.evaluateJavaScript("window.scrollY") as? Double
+        #expect((y ?? 0) > 0)
+    }
+
     @Test func usesChosenFont() async throws {
         let preview = PreviewView.Coordinator()
         preview.font = .quattro

@@ -49,6 +49,23 @@ import Testing
                 == [NSRange(location: 2, length: 0)])
     }
 
+    @Test func insertionAtStartShiftsTheRange() {
+        #expect(C.shift([NSRange(location: 4, length: 6)], replacing: NSRange(location: 4, length: 0), with: 2)
+                == [NSRange(location: 6, length: 6)])
+    }
+
+    @Test func insertionAtEndDoesNotExtendTheRange() {
+        // Text typed right after a closing backtick is not code.
+        #expect(C.shift([NSRange(location: 4, length: 6)], replacing: NSRange(location: 10, length: 0), with: 2,
+                        documentLength: 20) == [NSRange(location: 4, length: 6)])
+    }
+
+    @Test func typingAtTheEndOfAnUnclosedFenceStaysCode() {
+        // "```\nlet x" with no closing fence: the code block runs to the end of the document.
+        #expect(C.shift([NSRange(location: 0, length: 9)], replacing: NSRange(location: 9, length: 0), with: 3,
+                        documentLength: 9) == [NSRange(location: 0, length: 12)])
+    }
+
     @Test func editAfterIsIgnored() {
         #expect(C.shift([NSRange(location: 4, length: 6)], replacing: NSRange(location: 11, length: 1), with: 0)
                 == [NSRange(location: 4, length: 6)])

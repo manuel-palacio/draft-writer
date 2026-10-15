@@ -58,6 +58,7 @@ struct PreviewView: NSViewRepresentable {
         private var waiters: [CheckedContinuation<Void, Never>] = []
         private(set) var updateTask: Task<Void, Never>?
         private var lastLine = 0
+        private var requestedLine = 0
         /// Body font; changing it restyles the loaded page in place.
         var font: EditorFont = .duo {
             didSet { if loaded { applyFont() } }
@@ -104,7 +105,9 @@ struct PreviewView: NSViewRepresentable {
                 "document.documentElement.style.setProperty('--body-font', '\"\(font.cssFamily)\"')")
         }
 
+        /// Scrolls to the source line at the editor's top. Remembered while a page loads and applied on load.
         func scroll(toLine line: Int) {
+            requestedLine = line
             guard loaded, line != lastLine else { return }
             lastLine = line
             webView.evaluateJavaScript("window.draftScrollToLine && window.draftScrollToLine(\(line))")
@@ -141,6 +144,10 @@ struct PreviewView: NSViewRepresentable {
                 pendingBody = nil
                 replaceContent(body)
             }
+            // Settings that changed while the page was loading (or before a crash reload).
+            applyFont()
+            lastLine = 0
+            if requestedLine > 1 { scroll(toLine: requestedLine) }
             releaseWaiters()
         }
 
