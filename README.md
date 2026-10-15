@@ -3,7 +3,9 @@
 A calm, distraction-free Markdown editor for macOS, inspired by [iA Writer](https://ia.net/writer).
 Your files stay plain `.md` text: Draft Writer only changes how they look while you write.
 
-## Features (M1)
+![The editor with a Markdown document](docs/screenshots/editor.png)
+
+## Features
 
 - Native Mac documents: autosave, versions, tabs, Open Recent, iCloud Drive
 - iA Writer Duo, Mono and Quattro fonts in a centred, fixed-width column
@@ -18,6 +20,24 @@ Your files stay plain `.md` text: Draft Writer only changes how they look while 
   German, Spanish and the other languages Apple's NaturalLanguage tags; others, such as Swedish, stay plain)
 - Library sidebar: browse, search (names and contents), rename and trash the notes in one folder;
   new notes in the selected folder
+
+## Screenshots
+
+Focus mode keeps only the sentence you're writing bright:
+
+![Focus mode dimming all but the current sentence](docs/screenshots/focus.png)
+
+The live preview sits beside the editor and follows your scrolling:
+
+![Editor and live preview side by side](docs/screenshots/preview.png)
+
+Syntax highlighting colours nouns, verbs, adjectives, adverbs and conjunctions:
+
+![Syntax highlighting by part of speech](docs/screenshots/highlight.png)
+
+Dark appearance:
+
+![The editor in dark mode](docs/screenshots/dark.png)
 
 ## Shortcuts
 
@@ -55,6 +75,8 @@ Raw HTML in documents is not rendered.
 
 `DraftWriterUITests` drives the real app and needs an unlocked screen with UI automation allowed.
 `scripts/make-fixture.swift` regenerates the 50,000-word performance fixture.
+`scripts/screenshots.sh` re-renders the README screenshots from the real window, offscreen, so it works
+on a headless Mac.
 
 ## Layout
 

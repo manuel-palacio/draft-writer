@@ -113,6 +113,14 @@ struct EditorView: NSViewRepresentable {
             scrollView.contentView.postsBoundsChangedNotifications = true
             NotificationCenter.default.addObserver(self, selector: #selector(clipViewDidScroll),
                                                    name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+            // A new window starts small and then takes its size; colour the text that resizing reveals.
+            scrollView.contentView.postsFrameChangedNotifications = true
+            NotificationCenter.default.addObserver(self, selector: #selector(clipViewDidResize),
+                                                   name: NSView.frameDidChangeNotification, object: scrollView.contentView)
+        }
+
+        @objc private func clipViewDidResize(_ notification: Notification) {
+            if !parent.highlightClasses.isEmpty { applyRenderingColors() }
         }
 
         @objc private func clipViewDidScroll(_ notification: Notification) {
@@ -165,17 +173,22 @@ struct EditorView: NSViewRepresentable {
             }
         }
 
-        /// The visible text plus one screen above and below.
+        /// The visible text plus one screen above and below, from TextKit 2's layout fragments.
+        /// (Hit-testing points with `characterIndexForInsertion` fails in the text insets, where it returns the end.)
         private func visibleRangeWithMargin() -> NSRange {
-            guard let textView else { return NSRange() }
+            guard let textView, let tlm = textView.textLayoutManager else { return NSRange() }
             let visible = textView.visibleRect
-            let x = textView.textContainerInset.width + 1
-            let top = textView.characterIndexForInsertion(at: NSPoint(x: x, y: max(0, visible.minY - visible.height)))
-            let bottom = textView.characterIndexForInsertion(at: NSPoint(x: textView.bounds.maxX - x,
-                                                                         y: visible.maxY + visible.height))
-            let length = (textView.string as NSString).length
-            let lower = min(top, length)
-            return NSRange(location: lower, length: max(0, min(max(bottom, lower), length) - lower))
+            let origin = textView.textContainerOrigin
+            let area = visible.insetBy(dx: 0, dy: -visible.height).offsetBy(dx: -origin.x, dy: -origin.y)
+            tlm.ensureLayout(for: area)   // TextKit 2 lays out lazily
+            let document = tlm.documentRange
+            let lower = tlm.textLayoutFragment(for: CGPoint(x: 0, y: max(0, area.minY)))?.rangeInElement.location
+                ?? document.location
+            let upper = tlm.textLayoutFragment(for: CGPoint(x: 0, y: area.maxY))?.rangeInElement.endLocation
+                ?? document.endLocation
+            let start = tlm.offset(from: document.location, to: lower)
+            let end = tlm.offset(from: document.location, to: upper)
+            return NSRange(location: start, length: max(0, end - start))
         }
 
         /// Asks NaturalLanguage once per language per launch to download a missing tagging model,

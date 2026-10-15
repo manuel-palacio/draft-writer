@@ -29,6 +29,7 @@ final class EditorHarness {
         coordinator.textView = textView
         self.textView = textView
         window.contentView = scrollView
+        coordinator.observeScrolling(of: scrollView)
         box.harness = self
         coordinator.restyleAll()
     }

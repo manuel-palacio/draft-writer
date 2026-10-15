@@ -62,4 +62,18 @@ import Testing
         h.coordinator.applyRenderingColors()
         #expect(renderingColor(h, at: offset(of: "fox", in: h)) == nil)
     }
+
+    @Test func recoloursWhenWindowGrows() {
+        // A window opens tiny and then takes its real size; words that become visible must be coloured
+        // without the user having to scroll first.
+        let text = (1...12).map { "Line \($0) has a fox." }.joined(separator: "\n\n") + "\n\nThe last dog sleeps."
+        let h = EditorHarness(initial: text)
+        h.window.setContentSize(NSSize(width: 400, height: 30))
+        h.coordinator.parent.highlightClasses = Set(LexicalClass.allCases)
+        h.coordinator.applyRenderingColors()
+        #expect(renderingColor(h, at: offset(of: "dog", in: h)) == nil)
+        h.window.setContentSize(NSSize(width: 800, height: 900))
+        h.window.contentView?.layoutSubtreeIfNeeded()
+        #expect(renderingColor(h, at: offset(of: "dog", in: h)) === Theme.highlight(.noun, dimmed: false))
+    }
 }
