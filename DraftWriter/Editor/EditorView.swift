@@ -159,12 +159,12 @@ struct EditorView: NSViewRepresentable {
 
             guard !parent.highlightClasses.isEmpty else { return }
             let visible = visibleRangeWithMargin()
-            requestLanguageModelIfNeeded(for: (text as NSString).substring(with: visible))
             for highlight in highlighter.highlights(in: text, range: visible, excluding: codeRanges)
             where parent.highlightClasses.contains(highlight.lexicalClass) {
                 let isDimmed = bright.map { NSIntersectionRange($0, highlight.range).length == 0 } ?? false
                 setColor(Theme.highlight(highlight.lexicalClass, dimmed: isDimmed), highlight.range, tlm)
             }
+            requestMissingLanguageModels()
         }
 
         private func setColor(_ color: NSColor, _ range: NSRange, _ tlm: NSTextLayoutManager) {
@@ -191,15 +191,21 @@ struct EditorView: NSViewRepresentable {
             return NSRange(location: start, length: max(0, end - start))
         }
 
-        /// Asks NaturalLanguage once per language per launch to download a missing tagging model,
-        /// then re-colours. Languages Apple has no model for (e.g. Swedish) simply stay uncoloured.
-        private func requestLanguageModelIfNeeded(for text: String) {
-            guard let language = SyntaxHighlighter.needsAssets(text),
-                  !Self.requestedLanguages.contains(language) else { return }
-            Self.requestedLanguages.insert(language)
-            NLTagger.requestAssets(for: language, tagScheme: .lexicalClass) { [weak self] result, _ in
-                guard result == .available else { return }
-                Task { @MainActor in self?.applyRenderingColors() }
+        /// Asks NaturalLanguage to download the tagging model for each language the highlighter met without one,
+        /// then re-colours. Each language is asked once per launch, unless the request failed (e.g. offline),
+        /// which is retried next time. Languages Apple has no model for (e.g. Swedish) stay uncoloured.
+        private func requestMissingLanguageModels() {
+            for language in highlighter.missingLanguages where !Self.requestedLanguages.contains(language) {
+                Self.requestedLanguages.insert(language)
+                NLTagger.requestAssets(for: language, tagScheme: .lexicalClass) { [weak self] result, _ in
+                    Task { @MainActor in
+                        switch result {
+                        case .available: self?.applyRenderingColors()
+                        case .error: Self.requestedLanguages.remove(language)
+                        default: break
+                        }
+                    }
+                }
             }
         }
 
@@ -230,16 +236,20 @@ struct EditorView: NSViewRepresentable {
             codeRanges = Self.shift(codeRanges, replacing: edited, with: newLength)
         }
 
-        private static func shift(_ ranges: [NSRange], replacing edited: NSRange, with newLength: Int) -> [NSRange] {
+        /// Moves `ranges` through an edit that replaced `edited` with `newLength` characters. An end point
+        /// inside the replaced text lands at the end of the new text, so the part of a range that survives a
+        /// deletion stays covered.
+        static func shift(_ ranges: [NSRange], replacing edited: NSRange, with newLength: Int) -> [NSRange] {
             let delta = newLength - edited.length
-            return ranges.map { block in
-                if block.location >= NSMaxRange(edited) {
-                    NSRange(location: block.location + delta, length: block.length)
-                } else if NSMaxRange(block) >= edited.location {
-                    NSRange(location: block.location, length: max(0, block.length + delta))
-                } else {
-                    block
-                }
+            func start(_ p: Int) -> Int {
+                p < edited.location ? p : p >= NSMaxRange(edited) ? p + delta : edited.location + newLength
+            }
+            func end(_ p: Int) -> Int {
+                p <= edited.location ? p : p >= NSMaxRange(edited) ? p + delta : edited.location + newLength
+            }
+            return ranges.map { range in
+                let lower = start(range.location)
+                return NSRange(location: lower, length: max(0, end(NSMaxRange(range)) - lower))
             }
         }
 

@@ -29,16 +29,23 @@ public struct Highlight: Hashable, Sendable {
 /// Part-of-speech highlighting with NaturalLanguage's lexical-class tagger. Works paragraph by paragraph,
 /// caches results by paragraph text, and leaves paragraphs in languages without a model uncoloured.
 public final class SyntaxHighlighter {
-    static let cacheLimit = 2_000
-
+    /// Total paragraph characters the cache may hold before it starts over. A paragraph longer than a tenth
+    /// of this is re-tagged each time instead, so one huge paragraph can't fill the cache with its edits.
+    private let cacheCharacterLimit: Int
     private var cache: [String: [Highlight]] = [:]   // paragraph text → highlights relative to the paragraph
+    private(set) var cachedCharacters = 0
+    /// Languages met while tagging that have no lexical-class model installed yet, so a document mixing
+    /// languages gets every model it needs (the caller requests them with `NLTagger.requestAssets`).
+    public private(set) var missingLanguages: Set<NLLanguage> = []
     private let tagger = NLTagger(tagSchemes: [.lexicalClass])
     private let recognizer = NLLanguageRecognizer()
     private let isSupported: (NLLanguage) -> Bool
 
     /// `isSupported` says whether a lexical-class model is installed for a language (injectable for tests).
-    public init(isSupported: @escaping (NLLanguage) -> Bool = SyntaxHighlighter.hasModel) {
+    public init(isSupported: @escaping (NLLanguage) -> Bool = SyntaxHighlighter.hasModel,
+                cacheCharacterLimit: Int = 1_000_000) {
         self.isSupported = isSupported
+        self.cacheCharacterLimit = cacheCharacterLimit
     }
 
     public static func hasModel(for language: NLLanguage) -> Bool {
@@ -63,19 +70,18 @@ public final class SyntaxHighlighter {
         return result
     }
 
-    /// The dominant language of `text` when NaturalLanguage has no lexical-class model for it yet
-    /// (the caller may request the model with `NLTagger.requestAssets`).
-    public static func needsAssets(_ text: String) -> NLLanguage? {
-        guard let language = NLLanguageRecognizer.dominantLanguage(for: text) else { return nil }
-        return hasModel(for: language) ? nil : language
-    }
-
     private func paragraphHighlights(_ paragraph: String) -> [Highlight] {
         if let cached = cache[paragraph] { return cached }
         // nil = no model for this language yet: not cached, so colours appear once the model downloads.
         guard let highlights = tag(paragraph) else { return [] }
-        if cache.count >= Self.cacheLimit { cache.removeAll(keepingCapacity: true) }
+        let size = paragraph.utf16.count
+        guard size <= cacheCharacterLimit / 10 else { return highlights }
+        if cachedCharacters + size > cacheCharacterLimit {
+            cache.removeAll(keepingCapacity: true)
+            cachedCharacters = 0
+        }
         cache[paragraph] = highlights
+        cachedCharacters += size
         return highlights
     }
 
@@ -83,7 +89,11 @@ public final class SyntaxHighlighter {
         recognizer.reset()
         recognizer.processString(paragraph)
         guard let language = recognizer.dominantLanguage else { return [] }
-        guard isSupported(language) else { return nil }
+        guard isSupported(language) else {
+            missingLanguages.insert(language)
+            return nil
+        }
+        missingLanguages.remove(language)
         tagger.string = paragraph
         let whole = paragraph.startIndex..<paragraph.endIndex
         tagger.setLanguage(language, range: whole)
