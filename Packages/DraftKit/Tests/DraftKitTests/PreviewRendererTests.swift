@@ -34,14 +34,6 @@ import Testing
         #expect(page.contains(#"<article id="content">"#))
     }
 
-    @Test func lineAtOffset() {
-        let text = "a\nb\r\nc"
-        #expect(PreviewRenderer.line(atUTF16Offset: 0, in: text) == 1)
-        #expect(PreviewRenderer.line(atUTF16Offset: 2, in: text) == 2)
-        #expect(PreviewRenderer.line(atUTF16Offset: 5, in: text) == 3)
-        #expect(PreviewRenderer.line(atUTF16Offset: 99, in: text) == 3)
-    }
-
     @Test func keepsTextAfterNUL() {
         #expect(PreviewRenderer.body(for: "before\u{0}after").contains("after"))
     }

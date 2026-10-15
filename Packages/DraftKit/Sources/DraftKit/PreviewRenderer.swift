@@ -40,19 +40,6 @@ public enum PreviewRenderer {
         """
     }
 
-    /// 1-based source line containing the UTF-16 `offset` (CR, LF and CRLF end lines, as in CommonMark).
-    public static func line(atUTF16Offset offset: Int, in text: String) -> Int {
-        var line = 1
-        var previous: UInt16 = 0
-        for (index, unit) in text.utf16.enumerated() {
-            if index >= offset { break }
-            if unit == 0x0A, previous != 0x0D { line += 1 }
-            if unit == 0x0D { line += 1 }
-            previous = unit
-        }
-        return line
-    }
-
     private static func escape(_ text: String) -> String {
         text.replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")

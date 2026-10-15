@@ -92,7 +92,7 @@ import WebKit
 
 @MainActor
 @Suite struct EditorTopLineTests {
-    @Test func reportsTopVisibleLineOnScroll() {
+    @Test func reportsTopVisibleLineOnScroll() async {
         let h = EditorHarness(initial: (1...300).map { "Line \($0)" }.joined(separator: "\n\n"))
         var reported = 0
         h.coordinator.parent.onTopLineChange = { reported = $0 }
@@ -100,7 +100,28 @@ import WebKit
         let clip = h.textView.enclosingScrollView!.contentView
         clip.scroll(to: NSPoint(x: 0, y: 3000))
         h.coordinator.reportTopLine()
+        await Task.yield()
         #expect(reported > 50)
+        clip.scroll(to: NSPoint(x: 0, y: 0))
+        h.coordinator.reportTopLine()
+        await Task.yield()
+        #expect(reported == 1)
         #expect(h.textView.textLayoutManager != nil)   // still TextKit 2
+    }
+
+    @Test func topLineReportsAreCheapOnHugeDocuments() {
+        let h = EditorHarness(initial: (1...40_000).map { "Line \($0) of a long document." }.joined(separator: "\n\n"))
+        h.coordinator.parent.onTopLineChange = { _ in }
+        h.window.layoutIfNeeded()
+        let clip = h.textView.enclosingScrollView!.contentView
+        clip.scroll(to: NSPoint(x: 0, y: 200_000))
+        h.coordinator.reportTopLine()   // builds the line index once
+        let elapsed = ContinuousClock().measure {
+            for step in 0..<50 {
+                clip.scroll(to: NSPoint(x: 0, y: 200_000 + step * 40))
+                h.coordinator.reportTopLine()
+            }
+        }
+        #expect(elapsed < .milliseconds(100))
     }
 }

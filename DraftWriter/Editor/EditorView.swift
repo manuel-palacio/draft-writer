@@ -47,6 +47,7 @@ struct EditorView: NSViewRepresentable {
             // External change (revert, undo through the document): replace and keep the caret in range.
             let caret = min(textView.selectedRange().location, (text as NSString).length)
             textView.string = text
+            coordinator.textReplaced()
             textView.setSelectedRange(NSRange(location: caret, length: 0))
             needsRestyle = true
         }
@@ -66,6 +67,8 @@ struct EditorView: NSViewRepresentable {
         /// Fenced code blocks from the last full pass, shifted as text is edited, so the fast path
         /// can re-parse a whole block instead of a fragment that loses its fences.
         private var codeBlocks: [NSRange] = []
+        private var lineIndex: LineIndex?
+        private var lastReportedLine = 0
         /// Inline code and code blocks from the last full pass; never highlighted.
         private var codeRanges: [NSRange] = []
         private(set) var appliedHighlightClasses: Set<LexicalClass> = []
@@ -82,8 +85,12 @@ struct EditorView: NSViewRepresentable {
             return true
         }
 
+        /// The text was replaced from outside (revert, document undo).
+        func textReplaced() { lineIndex = nil }
+
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
+            lineIndex = nil
             parent.text = textView.string
             guard !textView.hasMarkedText() else { return }   // never restyle mid-composition
             if let edited = lastEditedRange { restyleParagraphs(around: edited) }
@@ -128,12 +135,19 @@ struct EditorView: NSViewRepresentable {
             if !parent.highlightClasses.isEmpty { applyRenderingColors() }
         }
 
+        /// Tells the preview which source line is at the top. The line index is rebuilt only after edits,
+        /// and the report is sent only when the line changes, outside the current view update.
         func reportTopLine() {
-            guard let report = parent.onTopLineChange, let textView else { return }
-            let visible = textView.visibleRect
-            let point = NSPoint(x: textView.textContainerInset.width + 1, y: visible.minY + textView.textContainerInset.height)
-            let index = textView.characterIndexForInsertion(at: point)
-            report(PreviewRenderer.line(atUTF16Offset: index, in: textView.string))
+            guard let report = parent.onTopLineChange, let textView, let tlm = textView.textLayoutManager else { return }
+            let origin = textView.textContainerOrigin
+            let top = max(0, textView.visibleRect.minY - origin.y)
+            let document = tlm.documentRange
+            let location = tlm.textLayoutFragment(for: CGPoint(x: 0, y: top))?.rangeInElement.location ?? document.location
+            if lineIndex == nil { lineIndex = LineIndex(textView.string) }
+            let line = lineIndex!.line(atUTF16Offset: tlm.offset(from: document.location, to: location))
+            guard line != lastReportedLine else { return }
+            lastReportedLine = line
+            Task { @MainActor in report(line) }
         }
 
         /// Kept for callers that only think about focus; colours are applied together.
