@@ -34,7 +34,7 @@ struct DocumentWindow: View {
                         .frame(minWidth: 360)
                     if settings.showPreview {
                         PreviewView(markdown: document.text, documentFolder: fileURL?.deletingLastPathComponent(),
-                                    topLine: topLine)
+                                    topLine: topLine, font: settings.font)
                             .frame(minWidth: 320)
                     }
                 }
@@ -50,7 +50,8 @@ struct DocumentWindow: View {
         .onContinuousHover { _ in if isTyping { isTyping = false } }
         .onChange(of: document.text) { isTyping = true }
         .focusedSceneValue(\.exportSource, ExportSource(markdown: document.text, title: title,
-                                                         documentFolder: fileURL?.deletingLastPathComponent()))
+                                                         documentFolder: fileURL?.deletingLastPathComponent(),
+                                                         font: settings.font))
         .task(id: StatsInput(text: document.text, selection: selection)) { await updateStats() }
     }
 

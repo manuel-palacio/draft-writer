@@ -7,13 +7,15 @@ enum PreviewAssets {
     static let scheme = "draft-asset"
     static let baseURL = URL(string: "draft-asset://doc/")!
 
-    private static let faces: [(family: String, file: String, weight: String, style: String)] = [
-        ("iA Writer Duo", "iAWriterDuoS-Regular.ttf", "normal", "normal"),
-        ("iA Writer Duo", "iAWriterDuoS-Bold.ttf", "bold", "normal"),
-        ("iA Writer Duo", "iAWriterDuoS-Italic.ttf", "normal", "italic"),
-        ("iA Writer Duo", "iAWriterDuoS-BoldItalic.ttf", "bold", "italic"),
-        ("iA Writer Mono", "iAWriterMonoS-Regular.ttf", "normal", "normal"),
-    ]
+    /// The four bundled faces of each font family, as (family, file, weight, style).
+    private static func faces(_ fonts: [EditorFont]) -> [(family: String, file: String, weight: String, style: String)] {
+        fonts.flatMap { font in
+            [("Regular", "normal", "normal"), ("Bold", "bold", "normal"),
+             ("Italic", "normal", "italic"), ("BoldItalic", "bold", "italic")].map {
+                (font.cssFamily, "\(font.postScriptPrefix)-\($0.0).ttf", $0.1, $0.2)
+            }
+        }
+    }
 
     private static let darkColors = """
     @media (prefers-color-scheme: dark) {
@@ -22,26 +24,32 @@ enum PreviewAssets {
     }
     """
 
-    /// Stylesheet for the live preview: fonts from the app bundle, follows light/dark appearance.
-    static func previewCSS(bundle: Bundle = .main) -> String {
-        stylesheet(bundle: bundle, dark: darkColors) { "url(\"draft-asset://app/fonts/\($0)\")" }
+    /// Stylesheet for the live preview: every family from the app bundle (loaded on use, so the font can be
+    /// switched in place via `--body-font`), body text in `font`, follows light/dark appearance.
+    static func previewCSS(font: EditorFont = .duo, bundle: Bundle = .main) -> String {
+        stylesheet(font: font, faces: faces(EditorFont.allCases), bundle: bundle, dark: darkColors) {
+            "url(\"draft-asset://app/fonts/\($0)\")"
+        }
     }
 
-    /// Stylesheet for exported HTML/PDF: fonts inlined as data URIs, always light.
-    static func exportCSS(bundle: Bundle = .main) -> String {
-        stylesheet(bundle: bundle, dark: "") { file in
+    /// Stylesheet for exported HTML/PDF: body text in `font`; only that family and Mono (for code) are
+    /// inlined as data URIs; always light.
+    static func exportCSS(font: EditorFont = .duo, bundle: Bundle = .main) -> String {
+        let fonts = font == .mono ? [EditorFont.mono] : [font, .mono]
+        return stylesheet(font: font, faces: faces(fonts), bundle: bundle, dark: "") { file in
             guard let url = bundle.url(forResource: file, withExtension: nil, subdirectory: "Fonts"),
                   let data = try? Data(contentsOf: url) else { return "local(\"\(file)\")" }
             return "url(\"data:font/ttf;base64,\(data.base64EncodedString())\")"
         }
     }
 
-    private static func stylesheet(bundle: Bundle, dark: String, source: (String) -> String) -> String {
+    private static func stylesheet(font: EditorFont, faces: [(family: String, file: String, weight: String, style: String)],
+                                   bundle: Bundle, dark: String, source: (String) -> String) -> String {
         let template = bundle.url(forResource: "preview", withExtension: "css")
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
         let fontFaces = faces.map {
             "@font-face { font-family: \"\($0.family)\"; src: \(source($0.file)); font-weight: \($0.weight); font-style: \($0.style); }"
-        }.joined(separator: "\n")
+        }.joined(separator: "\n") + "\n:root { --body-font: \"\(font.cssFamily)\"; }"
         return template
             .replacingOccurrences(of: "/*{{font-face}}*/", with: fontFaces)
             .replacingOccurrences(of: "/*{{dark}}*/", with: dark)
@@ -53,10 +61,12 @@ enum PreviewAssets {
         let path = url.path(percentEncoded: false)
         switch url.host() {
         case "doc":
-            guard let folder = documentFolder?.standardizedFileURL, path.hasPrefix("/"), !path.hasPrefix("//") else {
+            // Resolve symlinks on both sides, so a link inside the folder can't point the preview outside it.
+            guard let folder = documentFolder?.standardizedFileURL.resolvingSymlinksInPath(),
+                  path.hasPrefix("/"), !path.hasPrefix("//") else {
                 return nil
             }
-            let candidate = folder.appending(path: String(path.dropFirst())).standardizedFileURL
+            let candidate = folder.appending(path: String(path.dropFirst())).standardizedFileURL.resolvingSymlinksInPath()
             return candidate.path.hasPrefix(folder.path + "/") ? candidate : nil
         case "app":
             let parts = path.split(separator: "/", omittingEmptySubsequences: false)
@@ -68,4 +78,9 @@ enum PreviewAssets {
             return nil
         }
     }
+}
+
+extension EditorFont {
+    /// The CSS font-family name the preview and exports declare for this font.
+    var cssFamily: String { "iA Writer \(displayName)" }
 }

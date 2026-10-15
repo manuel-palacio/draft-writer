@@ -22,6 +22,11 @@ import Testing
         #expect(html.contains("<title>Long &lt;Doc&gt;</title>"))
     }
 
+    @Test func htmlUsesChosenFont() {
+        let html = Exporter.html(ExportSource(markdown: "Hi", title: "x", documentFolder: nil, font: .quattro))
+        #expect(html.contains("--body-font: \"iA Writer Quattro\""))
+    }
+
     @Test func pdfIsPaginatedA4() async throws {
         let url = tempURL("pdf")
         defer { try? FileManager.default.removeItem(at: url) }

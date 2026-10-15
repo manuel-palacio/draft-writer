@@ -8,12 +8,14 @@ struct PreviewView: NSViewRepresentable {
     let markdown: String
     let documentFolder: URL?
     let topLine: Int
+    var font: EditorFont = .duo
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> WKWebView {
         let coordinator = context.coordinator
         coordinator.assets.documentFolder = documentFolder
+        coordinator.font = font
         coordinator.show(markdown: markdown)
         coordinator.lastMarkdown = markdown
         return coordinator.webView
@@ -22,10 +24,10 @@ struct PreviewView: NSViewRepresentable {
     func updateNSView(_ webView: WKWebView, context: Context) {
         let coordinator = context.coordinator
         coordinator.assets.documentFolder = documentFolder
+        if coordinator.font != font { coordinator.font = font }
         if coordinator.lastMarkdown != markdown {
             coordinator.lastMarkdown = markdown
-            let markdown = markdown
-            Task { await coordinator.update(markdown: markdown) }
+            coordinator.scheduleUpdate(markdown: markdown)
         }
         coordinator.scroll(toLine: topLine)
     }
@@ -49,10 +51,15 @@ struct PreviewView: NSViewRepresentable {
         private(set) var pageLoads = 0
         var lastMarkdown = ""
         private var loaded = false
+        private var pageRequested = false
         private var pendingBody: String?
         private var waiters: [CheckedContinuation<Void, Never>] = []
-        private var generation = 0
+        private(set) var updateTask: Task<Void, Never>?
         private var lastLine = 0
+        /// Body font; changing it restyles the loaded page in place.
+        var font: EditorFont = .duo {
+            didSet { if loaded { applyFont() } }
+        }
 
         override init() {
             let configuration = WKWebViewConfiguration()
@@ -68,9 +75,10 @@ struct PreviewView: NSViewRepresentable {
 
         /// Shows `markdown` now: the first call loads the page, later calls replace its content.
         func show(markdown: String) {
-            if pageLoads == 0 {
-                pageLoads = 1
-                let page = PreviewRenderer.page(for: markdown, title: "Preview", css: PreviewAssets.previewCSS())
+            if !pageRequested {
+                pageRequested = true
+                pageLoads += 1
+                let page = PreviewRenderer.page(for: markdown, title: "Preview", css: PreviewAssets.previewCSS(font: font))
                 webView.loadHTMLString(page, baseURL: PreviewAssets.baseURL)
                 return
             }
@@ -78,13 +86,19 @@ struct PreviewView: NSViewRepresentable {
             if loaded { replaceContent(body) } else { pendingBody = body }
         }
 
-        /// Debounced `show`: only the last call within 300 ms renders.
-        func update(markdown: String) async {
-            generation += 1
-            let mine = generation
-            try? await Task.sleep(for: Self.updateDelay)
-            guard mine == generation else { return }
-            show(markdown: markdown)
+        /// Debounced `show`: renders 300 ms after the last call; each call replaces the pending one.
+        func scheduleUpdate(markdown: String) {
+            updateTask?.cancel()
+            updateTask = Task { [weak self] in
+                try? await Task.sleep(for: Self.updateDelay)
+                guard !Task.isCancelled else { return }
+                self?.show(markdown: markdown)
+            }
+        }
+
+        private func applyFont() {
+            webView.evaluateJavaScript(
+                "document.documentElement.style.setProperty('--body-font', '\"\(font.cssFamily)\"')")
         }
 
         func scroll(toLine line: Int) {
@@ -135,8 +149,13 @@ struct PreviewView: NSViewRepresentable {
             releaseWaiters()
         }
 
+        /// The page's process crashed (or was killed for memory): load the page again with the latest text.
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             releaseWaiters()
+            loaded = false
+            pageRequested = false
+            lastLine = 0
+            show(markdown: lastMarkdown)
         }
 
         private func releaseWaiters() {

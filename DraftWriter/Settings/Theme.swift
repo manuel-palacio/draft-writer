@@ -15,7 +15,7 @@ enum EditorFont: String, CaseIterable, Identifiable {
     }
 
     /// PostScript name prefix of the bundled static iA fonts, e.g. "iAWriterDuoS-Regular".
-    fileprivate var postScriptPrefix: String {
+    var postScriptPrefix: String {
         switch self {
         case .duo: "iAWriterDuoS"
         case .mono: "iAWriterMonoS"

@@ -29,10 +29,36 @@ import WebKit
         let preview = PreviewView.Coordinator()
         preview.show(markdown: "# A")
         await preview.waitUntilLoaded()
-        async let first: Void = preview.update(markdown: "# B")
-        async let second: Void = preview.update(markdown: "# C")
-        _ = await (first, second)
+        preview.scheduleUpdate(markdown: "# B")
+        let first = preview.updateTask
+        preview.scheduleUpdate(markdown: "# C")
+        #expect(first?.isCancelled == true)   // one pending render at a time
+        await preview.updateTask?.value
         #expect(try await text(preview, "#content h1") == "C")
+        #expect(preview.pageLoads == 1)
+    }
+
+    @Test func reloadsAfterWebProcessCrash() async throws {
+        let preview = PreviewView.Coordinator()
+        preview.show(markdown: "# A")
+        await preview.waitUntilLoaded()
+        preview.lastMarkdown = "# After"
+        preview.webViewWebContentProcessDidTerminate(preview.webView)
+        await preview.waitUntilLoaded()
+        #expect(try await text(preview, "#content h1") == "After")
+        #expect(preview.pageLoads == 2)
+    }
+
+    @Test func usesChosenFont() async throws {
+        let preview = PreviewView.Coordinator()
+        preview.font = .quattro
+        preview.show(markdown: "Hello")
+        await preview.waitUntilLoaded()
+        var family = try await preview.webView.evaluateJavaScript("getComputedStyle(document.body).fontFamily") as? String
+        #expect(family?.contains("Quattro") == true)
+        preview.font = .mono
+        family = try await preview.webView.evaluateJavaScript("getComputedStyle(document.body).fontFamily") as? String
+        #expect(family?.contains("iA Writer Mono") == true)
         #expect(preview.pageLoads == 1)
     }
 
