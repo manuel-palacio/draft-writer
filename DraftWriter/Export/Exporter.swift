@@ -1,5 +1,6 @@
 import AppKit
 import DraftKit
+import Synchronization
 import WebKit
 
 enum PageSize: String, CaseIterable, Identifiable {
@@ -14,6 +15,7 @@ struct ExportSource {
     let markdown: String
     let title: String
     let documentFolder: URL?
+    var font: EditorFont = .duo
 }
 
 enum ExportError: LocalizedError {
@@ -34,7 +36,7 @@ enum Exporter {
     static let margin: CGFloat = 56.7   // 2 cm
 
     static func html(_ source: ExportSource) -> String {
-        PreviewRenderer.page(for: source.markdown, title: source.title, css: PreviewAssets.exportCSS())
+        PreviewRenderer.page(for: source.markdown, title: source.title, css: PreviewAssets.exportCSS(font: source.font))
     }
 
     static func writePDF(_ source: ExportSource, to url: URL, pageSize: PageSize) async throws {
@@ -135,21 +137,20 @@ final class PrintPage: NSObject, WKNavigationDelegate {
 }
 
 /// Bridges NSPrintOperation's modal completion callback to async/await. AppKit may call back on a
-/// background thread, so the callback is nonisolated; resuming a continuation is thread-safe.
-private final class PrintRunner: NSObject, @unchecked Sendable {
-    nonisolated(unsafe) private var continuation: CheckedContinuation<Bool, Never>?
+/// background thread, so the callback is nonisolated and the continuation sits behind a Mutex.
+private final class PrintRunner: NSObject, Sendable {
+    private let continuation = Mutex<CheckedContinuation<Bool, Never>?>(nil)
 
     @MainActor
     func run(_ operation: NSPrintOperation, for window: NSWindow) async -> Bool {
         await withCheckedContinuation { continuation in
-            self.continuation = continuation
+            self.continuation.withLock { $0 = continuation }
             operation.runModal(for: window, delegate: self,
                                didRun: #selector(printOperationDidRun(_:success:contextInfo:)), contextInfo: nil)
         }
     }
 
     @objc nonisolated private func printOperationDidRun(_ operation: NSPrintOperation, success: Bool, contextInfo: UnsafeMutableRawPointer?) {
-        continuation?.resume(returning: success)
-        continuation = nil
+        continuation.withLock { $0.take() }?.resume(returning: success)
     }
 }

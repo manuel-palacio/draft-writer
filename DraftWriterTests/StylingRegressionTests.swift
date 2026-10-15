@@ -23,3 +23,34 @@ import Testing
         #expect(style.firstLineHeadIndent == 0)
     }
 }
+
+@MainActor
+@Suite struct CodeRangeShiftTests {
+    typealias C = EditorView.Coordinator
+
+    @Test func deletionIntoCodeKeepsTheRestOfTheCode() {
+        // "abc `code` x" with `code` at {4,6}; deleting {2,4} leaves "ode`" at {2,4}.
+        #expect(C.shift([NSRange(location: 4, length: 6)], replacing: NSRange(location: 2, length: 4), with: 0)
+                == [NSRange(location: 2, length: 4)])
+    }
+
+    @Test func insertionBeforeShifts() {
+        #expect(C.shift([NSRange(location: 4, length: 6)], replacing: NSRange(location: 1, length: 0), with: 3)
+                == [NSRange(location: 7, length: 6)])
+    }
+
+    @Test func editInsideResizes() {
+        #expect(C.shift([NSRange(location: 4, length: 6)], replacing: NSRange(location: 6, length: 1), with: 3)
+                == [NSRange(location: 4, length: 8)])
+    }
+
+    @Test func deletionCoveringCodeCollapsesIt() {
+        #expect(C.shift([NSRange(location: 4, length: 6)], replacing: NSRange(location: 2, length: 10), with: 0)
+                == [NSRange(location: 2, length: 0)])
+    }
+
+    @Test func editAfterIsIgnored() {
+        #expect(C.shift([NSRange(location: 4, length: 6)], replacing: NSRange(location: 11, length: 1), with: 0)
+                == [NSRange(location: 4, length: 6)])
+    }
+}

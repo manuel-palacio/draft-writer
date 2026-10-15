@@ -54,6 +54,24 @@ import Testing
         #expect(highlighter.highlights(in: text, range: all, excluding: []) == highlighter.highlights(in: text, range: all, excluding: []))
     }
 
+    @Test func cacheIsBoundedByCharacters() {
+        let highlighter = SyntaxHighlighter(cacheCharacterLimit: 1_000)
+        // Every keystroke in a long paragraph adds a new version of it; the cache must not keep them all.
+        var text = String(repeating: "The fox runs. ", count: 3)   // 42 characters, cacheable
+        for _ in 0..<50 {
+            text += "a"
+            _ = highlighter.highlights(in: text, range: NSRange(location: 0, length: 1), excluding: [])
+            #expect(highlighter.cachedCharacters <= 1_000)
+        }
+    }
+
+    @Test func hugeParagraphIsNotCached() {
+        let highlighter = SyntaxHighlighter(cacheCharacterLimit: 1_000)
+        let text = String(repeating: "The fox runs. ", count: 20)   // 280 characters, over a tenth of the budget
+        _ = highlighter.highlights(in: text, range: NSRange(location: 0, length: 1), excluding: [])
+        #expect(highlighter.cachedCharacters == 0)
+    }
+
     @Test func missingModelIsNotCached() {
         var supported = false
         let highlighter = SyntaxHighlighter(isSupported: { _ in supported })
@@ -64,7 +82,22 @@ import Testing
         #expect(!highlighter.highlights(in: text, range: all, excluding: []).isEmpty)
     }
 
+    @Test func missingLanguagesAreFoundPerParagraph() {
+        let highlighter = SyntaxHighlighter(isSupported: { $0 == .english })
+        let text = """
+        The weather was lovely this morning, so we walked along the river for an hour.
+
+        Nous avons mangé une excellente soupe à l'oignon dans un petit restaurant du quartier.
+
+        Wir sind danach mit dem Zug nach Hause gefahren und haben lange geschlafen.
+        """
+        _ = highlighter.highlights(in: text, range: NSRange(location: 0, length: (text as NSString).length), excluding: [])
+        #expect(highlighter.missingLanguages == [.french, .german])
+    }
+
     @Test func needsAssetsIsNilForEnglish() {
-        #expect(SyntaxHighlighter.needsAssets("The quick fox jumps over the lazy dog.") == nil)
+        let highlighter = SyntaxHighlighter()
+        _ = highlighter.highlights(in: "The quick fox jumps over the lazy dog.", range: NSRange(location: 0, length: 1), excluding: [])
+        #expect(highlighter.missingLanguages.isEmpty)
     }
 }

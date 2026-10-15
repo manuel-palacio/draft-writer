@@ -35,6 +35,13 @@ import Testing
         #expect(ms < 150, "styling a bridged string took \(ms) ms")
     }
 
+    /// Runs on every save of a document.
+    @Test func lineEndingsOnLongDocument() {
+        let bridged = NSTextStorage(string: text).string
+        let ms = milliseconds { _ = LineEnding.crlf.apply(to: bridged) }
+        #expect(ms < 100, "normalising line endings took \(ms) ms")
+    }
+
     @Test func focusLongDocument() {
         let middle = NSRange(location: (text as NSString).length / 2, length: 0)
         let ms = milliseconds { _ = FocusController.brightRange(in: text, selection: middle, mode: .sentence) }

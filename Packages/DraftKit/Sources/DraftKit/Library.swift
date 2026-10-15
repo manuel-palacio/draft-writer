@@ -31,16 +31,16 @@ public enum Library {
     private static let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .contentModificationDateKey, .fileSizeKey]
 
     /// The tree under `root`: notes, and the folders that contain notes at any depth. Folders first.
+    /// Throws only if `root` itself can't be read; unreadable entries inside it are skipped.
     public static func scan(_ root: URL, sort: LibrarySort) throws -> [LibraryItem] {
         let urls = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: keys, options: .skipsHiddenFiles)
         var folders: [LibraryItem] = []
         var files: [LibraryItem] = []
         for url in urls {
-            let values = try url.resourceValues(forKeys: Set(keys))
+            guard let values = try? url.resourceValues(forKeys: Set(keys)) else { continue }
             let modified = values.contentModificationDate ?? .distantPast
             if values.isDirectory == true, values.isPackage != true {
-                let children = try scan(url, sort: sort)
-                if !children.isEmpty {
+                if let children = try? scan(url, sort: sort), !children.isEmpty {
                     folders.append(LibraryItem(url: url, name: url.lastPathComponent, isFolder: true, modified: modified, children: children))
                 }
             } else if isNote(url) {
@@ -103,8 +103,12 @@ public enum Library {
         return destination
     }
 
-    public static func trash(_ url: URL) throws {
-        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+    /// Moves `url` to the Trash and returns where it ended up.
+    @discardableResult
+    public static func trash(_ url: URL) throws -> URL? {
+        var trashed: NSURL?
+        try FileManager.default.trashItem(at: url, resultingItemURL: &trashed)
+        return trashed as URL?
     }
 
     static func isNote(_ url: URL) -> Bool {

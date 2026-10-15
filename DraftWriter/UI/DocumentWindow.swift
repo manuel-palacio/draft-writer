@@ -9,6 +9,7 @@ struct DocumentWindow: View {
     @Binding var document: MarkdownDocument
     let fileURL: URL?
     @Bindable var settings: EditorSettings
+    var library: LibraryStore = .shared
     @State private var selection = NSRange(location: 0, length: 0)
     @State private var stats = TextStats(words: 0, characters: 0, readingMinutes: 0)
     @State private var isTyping = false
@@ -17,7 +18,7 @@ struct DocumentWindow: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: libraryVisibility) {
-            LibrarySidebar(store: LibraryStore.shared)
+            LibrarySidebar(store: library)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 400)
         } detail: {
             VStack(spacing: 0) {
@@ -33,7 +34,7 @@ struct DocumentWindow: View {
                         .frame(minWidth: 360)
                     if settings.showPreview {
                         PreviewView(markdown: document.text, documentFolder: fileURL?.deletingLastPathComponent(),
-                                    topLine: topLine)
+                                    topLine: topLine, font: settings.font)
                             .frame(minWidth: 320)
                     }
                 }
@@ -49,7 +50,8 @@ struct DocumentWindow: View {
         .onContinuousHover { _ in if isTyping { isTyping = false } }
         .onChange(of: document.text) { isTyping = true }
         .focusedSceneValue(\.exportSource, ExportSource(markdown: document.text, title: title,
-                                                         documentFolder: fileURL?.deletingLastPathComponent()))
+                                                         documentFolder: fileURL?.deletingLastPathComponent(),
+                                                         font: settings.font))
         .task(id: StatsInput(text: document.text, selection: selection)) { await updateStats() }
     }
 

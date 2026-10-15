@@ -47,6 +47,7 @@ struct EditorView: NSViewRepresentable {
             // External change (revert, undo through the document): replace and keep the caret in range.
             let caret = min(textView.selectedRange().location, (text as NSString).length)
             textView.string = text
+            coordinator.textReplaced()
             textView.setSelectedRange(NSRange(location: caret, length: 0))
             needsRestyle = true
         }
@@ -66,11 +67,14 @@ struct EditorView: NSViewRepresentable {
         /// Fenced code blocks from the last full pass, shifted as text is edited, so the fast path
         /// can re-parse a whole block instead of a fragment that loses its fences.
         private var codeBlocks: [NSRange] = []
+        private var lineIndex: LineIndex?
+        private var lastReportedLine = 0
         /// Inline code and code blocks from the last full pass; never highlighted.
         private var codeRanges: [NSRange] = []
         private(set) var appliedHighlightClasses: Set<LexicalClass> = []
         private let highlighter = SyntaxHighlighter()
         private static var requestedLanguages: Set<NLLanguage> = []
+        static let modelRetryDelay: Duration = .seconds(60)
 
         init(_ parent: EditorView) {
             self.parent = parent
@@ -82,8 +86,12 @@ struct EditorView: NSViewRepresentable {
             return true
         }
 
+        /// The text was replaced from outside (revert, document undo).
+        func textReplaced() { lineIndex = nil }
+
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
+            lineIndex = nil
             parent.text = textView.string
             guard !textView.hasMarkedText() else { return }   // never restyle mid-composition
             if let edited = lastEditedRange { restyleParagraphs(around: edited) }
@@ -113,6 +121,14 @@ struct EditorView: NSViewRepresentable {
             scrollView.contentView.postsBoundsChangedNotifications = true
             NotificationCenter.default.addObserver(self, selector: #selector(clipViewDidScroll),
                                                    name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+            // A new window starts small and then takes its size; colour the text that resizing reveals.
+            scrollView.contentView.postsFrameChangedNotifications = true
+            NotificationCenter.default.addObserver(self, selector: #selector(clipViewDidResize),
+                                                   name: NSView.frameDidChangeNotification, object: scrollView.contentView)
+        }
+
+        @objc private func clipViewDidResize(_ notification: Notification) {
+            if !parent.highlightClasses.isEmpty { applyRenderingColors() }
         }
 
         @objc private func clipViewDidScroll(_ notification: Notification) {
@@ -120,12 +136,19 @@ struct EditorView: NSViewRepresentable {
             if !parent.highlightClasses.isEmpty { applyRenderingColors() }
         }
 
+        /// Tells the preview which source line is at the top. The line index is rebuilt only after edits,
+        /// and the report is sent only when the line changes, outside the current view update.
         func reportTopLine() {
-            guard let report = parent.onTopLineChange, let textView else { return }
-            let visible = textView.visibleRect
-            let point = NSPoint(x: textView.textContainerInset.width + 1, y: visible.minY + textView.textContainerInset.height)
-            let index = textView.characterIndexForInsertion(at: point)
-            report(PreviewRenderer.line(atUTF16Offset: index, in: textView.string))
+            guard let report = parent.onTopLineChange, let textView, let tlm = textView.textLayoutManager else { return }
+            let origin = textView.textContainerOrigin
+            let top = max(0, textView.visibleRect.minY - origin.y)
+            let document = tlm.documentRange
+            let location = tlm.textLayoutFragment(for: CGPoint(x: 0, y: top))?.rangeInElement.location ?? document.location
+            if lineIndex == nil { lineIndex = LineIndex(textView.string) }
+            let line = lineIndex!.line(atUTF16Offset: tlm.offset(from: document.location, to: location))
+            guard line != lastReportedLine else { return }
+            lastReportedLine = line
+            Task { @MainActor in report(line) }
         }
 
         /// Kept for callers that only think about focus; colours are applied together.
@@ -151,12 +174,12 @@ struct EditorView: NSViewRepresentable {
 
             guard !parent.highlightClasses.isEmpty else { return }
             let visible = visibleRangeWithMargin()
-            requestLanguageModelIfNeeded(for: (text as NSString).substring(with: visible))
             for highlight in highlighter.highlights(in: text, range: visible, excluding: codeRanges)
             where parent.highlightClasses.contains(highlight.lexicalClass) {
                 let isDimmed = bright.map { NSIntersectionRange($0, highlight.range).length == 0 } ?? false
                 setColor(Theme.highlight(highlight.lexicalClass, dimmed: isDimmed), highlight.range, tlm)
             }
+            requestMissingLanguageModels()
         }
 
         private func setColor(_ color: NSColor, _ range: NSRange, _ tlm: NSTextLayoutManager) {
@@ -165,28 +188,42 @@ struct EditorView: NSViewRepresentable {
             }
         }
 
-        /// The visible text plus one screen above and below.
+        /// The visible text plus one screen above and below, from TextKit 2's layout fragments.
+        /// (Hit-testing points with `characterIndexForInsertion` fails in the text insets, where it returns the end.)
         private func visibleRangeWithMargin() -> NSRange {
-            guard let textView else { return NSRange() }
+            guard let textView, let tlm = textView.textLayoutManager else { return NSRange() }
             let visible = textView.visibleRect
-            let x = textView.textContainerInset.width + 1
-            let top = textView.characterIndexForInsertion(at: NSPoint(x: x, y: max(0, visible.minY - visible.height)))
-            let bottom = textView.characterIndexForInsertion(at: NSPoint(x: textView.bounds.maxX - x,
-                                                                         y: visible.maxY + visible.height))
-            let length = (textView.string as NSString).length
-            let lower = min(top, length)
-            return NSRange(location: lower, length: max(0, min(max(bottom, lower), length) - lower))
+            let origin = textView.textContainerOrigin
+            let area = visible.insetBy(dx: 0, dy: -visible.height).offsetBy(dx: -origin.x, dy: -origin.y)
+            tlm.ensureLayout(for: area)   // TextKit 2 lays out lazily
+            let document = tlm.documentRange
+            let lower = tlm.textLayoutFragment(for: CGPoint(x: 0, y: max(0, area.minY)))?.rangeInElement.location
+                ?? document.location
+            let upper = tlm.textLayoutFragment(for: CGPoint(x: 0, y: area.maxY))?.rangeInElement.endLocation
+                ?? document.endLocation
+            let start = tlm.offset(from: document.location, to: lower)
+            let end = tlm.offset(from: document.location, to: upper)
+            return NSRange(location: start, length: max(0, end - start))
         }
 
-        /// Asks NaturalLanguage once per language per launch to download a missing tagging model,
-        /// then re-colours. Languages Apple has no model for (e.g. Swedish) simply stay uncoloured.
-        private func requestLanguageModelIfNeeded(for text: String) {
-            guard let language = SyntaxHighlighter.needsAssets(text),
-                  !Self.requestedLanguages.contains(language) else { return }
-            Self.requestedLanguages.insert(language)
-            NLTagger.requestAssets(for: language, tagScheme: .lexicalClass) { [weak self] result, _ in
-                guard result == .available else { return }
-                Task { @MainActor in self?.applyRenderingColors() }
+        /// Asks NaturalLanguage to download the tagging model for each language the highlighter met without one,
+        /// then re-colours. Each language is asked once per launch, unless the request failed (e.g. offline),
+        /// which is retried a minute later. Languages Apple has no model for (e.g. Swedish) stay uncoloured.
+        private func requestMissingLanguageModels() {
+            for language in highlighter.missingLanguages where !Self.requestedLanguages.contains(language) {
+                Self.requestedLanguages.insert(language)
+                NLTagger.requestAssets(for: language, tagScheme: .lexicalClass) { [weak self] result, _ in
+                    Task { @MainActor in
+                        switch result {
+                        case .available: self?.applyRenderingColors()
+                        case .error:
+                            // Allow another try later (e.g. back online), not on every keystroke.
+                            try? await Task.sleep(for: Self.modelRetryDelay)
+                            Self.requestedLanguages.remove(language)
+                        default: break
+                        }
+                    }
+                }
             }
         }
 
@@ -217,16 +254,20 @@ struct EditorView: NSViewRepresentable {
             codeRanges = Self.shift(codeRanges, replacing: edited, with: newLength)
         }
 
-        private static func shift(_ ranges: [NSRange], replacing edited: NSRange, with newLength: Int) -> [NSRange] {
+        /// Moves `ranges` through an edit that replaced `edited` with `newLength` characters. An end point
+        /// inside the replaced text lands at the end of the new text, so the part of a range that survives a
+        /// deletion stays covered.
+        static func shift(_ ranges: [NSRange], replacing edited: NSRange, with newLength: Int) -> [NSRange] {
             let delta = newLength - edited.length
-            return ranges.map { block in
-                if block.location >= NSMaxRange(edited) {
-                    NSRange(location: block.location + delta, length: block.length)
-                } else if NSMaxRange(block) >= edited.location {
-                    NSRange(location: block.location, length: max(0, block.length + delta))
-                } else {
-                    block
-                }
+            func start(_ p: Int) -> Int {
+                p < edited.location ? p : p >= NSMaxRange(edited) ? p + delta : edited.location + newLength
+            }
+            func end(_ p: Int) -> Int {
+                p <= edited.location ? p : p >= NSMaxRange(edited) ? p + delta : edited.location + newLength
+            }
+            return ranges.map { range in
+                let lower = start(range.location)
+                return NSRange(location: lower, length: max(0, end(NSMaxRange(range)) - lower))
             }
         }
 

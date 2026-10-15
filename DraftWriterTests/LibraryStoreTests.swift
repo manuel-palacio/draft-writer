@@ -1,3 +1,4 @@
+import AppKit
 import DraftKit
 import Foundation
 import Testing
@@ -22,6 +23,59 @@ import Testing
         await store.refresh()
         #expect(Set(store.items.map(\.name)) == ["a.md", "notes.md"])
         #expect(store.root?.standardizedFileURL == folder.standardizedFileURL)
+    }
+
+    @Test func trashClosesTheNotesWindow() async throws {
+        let store = LibraryStore(defaults: defaults)
+        try store.choose(folder)
+        let note = folder.appending(path: "a.md")
+        let document = NSDocument()
+        document.fileURL = note
+        NSDocumentController.shared.addDocument(document)
+        defer { NSDocumentController.shared.removeDocument(document) }
+        try await store.trash(note)
+        #expect(!NSDocumentController.shared.documents.contains(document))
+    }
+
+    /// A document with unsaved typing, saved in place like Draft Writer's (autosave in place).
+    final class EditedDocument: NSDocument {
+        var text = "typed since the last autosave"
+        override class var autosavesInPlace: Bool { true }
+        override func data(ofType typeName: String) throws -> Data { Data(text.utf8) }
+    }
+
+    @Test func trashSavesUnsavedEditsFirst() async throws {
+        let store = LibraryStore(defaults: defaults)
+        try store.choose(folder)
+        let note = folder.appending(path: "a.md")
+        let document = EditedDocument()
+        document.fileURL = note
+        document.fileType = "net.daringfireball.markdown"
+        document.updateChangeCount(.changeDone)
+        NSDocumentController.shared.addDocument(document)
+        defer { NSDocumentController.shared.removeDocument(document) }
+        let trashed = try await store.trash(note)
+        let saved = try String(contentsOf: try #require(trashed), encoding: .utf8)
+        #expect(saved == "typed since the last autosave")   // the edits went into the file before it moved
+    }
+
+    @Test func newNoteCommandReportsErrors() async throws {
+        let store = LibraryStore(defaults: defaults)
+        try store.choose(folder)
+        store.selection = folder.appending(path: "gone", directoryHint: .isDirectory)   // a folder that no longer exists
+        var reported: (any Error)?
+        var opened: URL?
+        await LibraryCommands.newNote(store: store, open: { opened = $0 }, report: { reported = $0 })
+        #expect(reported != nil)
+        #expect(opened == nil)
+    }
+
+    @Test func newNoteCommandOpensTheNote() async throws {
+        let store = LibraryStore(defaults: defaults)
+        try store.choose(folder)
+        var opened: URL?
+        await LibraryCommands.newNote(store: store, open: { opened = $0 }, report: { _ in })
+        #expect(opened?.lastPathComponent == "Untitled.md")
     }
 
     @Test func restoreAfterRelaunch() async throws {

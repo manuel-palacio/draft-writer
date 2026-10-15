@@ -33,6 +33,18 @@ import Testing
         #expect(items.last?.children == nil)
     }
 
+    @Test func unreadableFolderDoesNotBlankTheTree() throws {
+        try file("a.md")
+        let locked = try file("locked/secret.md").deletingLastPathComponent()
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path) }
+        #expect(try Library.scan(root, sort: .name).map(\.name) == ["a.md"])
+    }
+
+    @Test func unreadableRootStillThrows() throws {
+        #expect(throws: (any Error).self) { try Library.scan(root.appending(path: "missing"), sort: .name) }
+    }
+
     @Test func sortByName() throws {
         for name in ["b.md", "A.md", "c.md"] { try file(name) }
         #expect(try Library.scan(root, sort: .name).map(\.name) == ["A.md", "b.md", "c.md"])

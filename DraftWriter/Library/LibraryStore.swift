@@ -1,3 +1,4 @@
+import class AppKit.NSDocumentController
 import DraftKit
 import Foundation
 import Observation
@@ -139,10 +140,24 @@ final class LibraryStore {
         Task { await refresh() }
     }
 
-    func trash(_ url: URL) throws {
-        try Library.trash(url)
+    /// Moves a note or folder to the Trash and closes the windows of the notes it held (they would
+    /// otherwise keep editing files in the Trash). Unsaved edits are saved first, so they go to the Trash
+    /// with the file. Returns where the item ended up.
+    @discardableResult
+    func trash(_ url: URL) async throws -> URL? {
+        let path = url.resolvingSymlinksInPath().path
+        let open = NSDocumentController.shared.documents.filter { document in
+            guard let file = document.fileURL?.resolvingSymlinksInPath().path else { return false }
+            return file == path || file.hasPrefix(path + "/")
+        }
+        for document in open where document.isDocumentEdited {
+            try await document.autosave(withImplicitCancellability: false)
+        }
+        let trashed = try Library.trash(url)
+        open.forEach { $0.close() }
         if selection == url { selection = nil }
         Task { await refresh() }
+        return trashed
     }
 
     private func activate(_ url: URL) {

@@ -124,7 +124,9 @@ struct LibrarySidebar: View {
     private func commitTrash() {
         guard let url = trashing else { return }
         trashing = nil
-        do { try store.trash(url) } catch { errorMessage = error.localizedDescription }
+        Task {
+            do { try await store.trash(url) } catch { errorMessage = error.localizedDescription }
+        }
     }
 
     private func chooseFolder() {

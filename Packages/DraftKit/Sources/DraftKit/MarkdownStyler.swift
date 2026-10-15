@@ -43,9 +43,15 @@ private struct StyleWalker: MarkupWalker {
     }
 
     mutating func visitHeading(_ heading: Heading) {
-        if let r = emit(heading, .heading(level: heading.level)) {
+        if let range = heading.range, var r = converter.nsRange(range) {
             let hashes = leadingRun(of: "#", in: r)
-            if hashes > 0 { add(NSRange(location: r.location, length: hashes), .syntaxMarker) }
+            if hashes > 0 {
+                add(NSRange(location: r.location, length: hashes), .syntaxMarker)
+            } else if let underlineEnd = setextUnderlineEnd(heading) {
+                // swift-markdown can extend a setext heading's range into the next block; stop at the underline.
+                r.length = min(r.length, underlineEnd - r.location)
+            }
+            add(r, .heading(level: heading.level))
         }
         descendInto(heading)
     }
@@ -82,8 +88,20 @@ private struct StyleWalker: MarkupWalker {
     }
 
     mutating func visitBlockQuote(_ blockQuote: BlockQuote) {
-        if let r = emit(blockQuote, .blockQuote), r.length > 0, ns.character(at: r.location) == UInt16(UInt8(ascii: ">")) {
-            add(NSRange(location: r.location, length: 1), .syntaxMarker)
+        if let r = emit(blockQuote, .blockQuote) {
+            // Grey the `>` on every line, found at the quote's own column so nested quotes mark their own.
+            let column = r.location - ns.lineRange(for: NSRange(location: r.location, length: 0)).location
+            var lineStart = r.location - column
+            while lineStart < NSMaxRange(r) {
+                var lineEnd = 0, next = 0
+                ns.getLineStart(nil, end: &next, contentsEnd: &lineEnd, for: NSRange(location: lineStart, length: 0))
+                var i = lineStart + column
+                while i < lineEnd, i - lineStart - column < 4, ns.character(at: i) == 0x20 { i += 1 }
+                if i < lineEnd, ns.character(at: i) == UInt16(UInt8(ascii: ">")) {
+                    add(NSRange(location: i, length: 1), .syntaxMarker)
+                }
+                lineStart = next
+            }
         }
         descendInto(blockQuote)
     }
@@ -113,6 +131,17 @@ private struct StyleWalker: MarkupWalker {
         guard r.length >= 2 * width else { return }
         add(NSRange(location: r.location, length: width), .syntaxMarker)
         add(NSRange(location: NSMaxRange(r) - width, length: width), .syntaxMarker)
+    }
+
+    /// UTF-16 offset just past a setext heading's underline (excluding the line break), or nil.
+    private func setextUnderlineEnd(_ heading: Heading) -> Int? {
+        guard let last = heading.children.reversed().first(where: { $0.range != nil })?.range,
+              let content = converter.nsRange(last) else { return nil }
+        let contentLine = ns.lineRange(for: NSRange(location: NSMaxRange(content), length: 0))
+        guard NSMaxRange(contentLine) < ns.length || contentLine.length > 0 else { return nil }
+        var end = 0
+        ns.getLineStart(nil, end: nil, contentsEnd: &end, for: NSRange(location: NSMaxRange(contentLine), length: 0))
+        return end
     }
 
     private func leadingRun(of character: Character, in r: NSRange) -> Int {
