@@ -65,14 +65,31 @@ final class DraftTextView: NSTextView {
     }
 
     /// Typewriter scrolling: keep the caret line in the vertical middle of the window.
+    /// True while a click or drag is selecting text: typewriter mode then leaves the scroll position alone,
+    /// so the text doesn't move under the pointer. It re-centres on the next keystroke.
+    private(set) var isMouseSelecting = false
+
+    override func mouseDown(with event: NSEvent) {
+        isMouseSelecting = true
+        defer { isMouseSelecting = false }
+        super.mouseDown(with: event)   // tracks the mouse until it goes up
+    }
+
+    /// Scrolls so the caret's line sits in the middle of the view. The caret rect comes from TextKit 2's
+    /// text segments (container coordinates), which works whether or not the window is on screen.
     func centerCaret() {
-        guard typewriter, let scrollView = enclosingScrollView, let window else { return }
-        let caret = NSRange(location: selectedRange().location, length: 0)
-        let screenRect = firstRect(forCharacterRange: caret, actualRange: nil)
-        guard screenRect != .zero else { return }
-        let rect = convert(window.convertFromScreen(screenRect), from: nil)
+        guard typewriter, !isMouseSelecting, let scrollView = enclosingScrollView, let tlm = textLayoutManager,
+              let caret = tlm.location(tlm.documentRange.location, offsetBy: selectedRange().location) else { return }
+        tlm.ensureLayout(for: NSTextRange(location: caret))
+        var caretRect: CGRect?
+        tlm.enumerateTextSegments(in: NSTextRange(location: caret), type: .standard, options: []) { _, rect, _, _ in
+            caretRect = rect
+            return false
+        }
+        guard let caretRect else { return }
+        let midY = caretRect.midY + textContainerOrigin.y
         let clip = scrollView.contentView
-        clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: max(0, rect.midY - clip.bounds.height / 2)))
+        clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: max(0, midY - clip.bounds.height / 2)))
         scrollView.reflectScrolledClipView(clip)
     }
 
