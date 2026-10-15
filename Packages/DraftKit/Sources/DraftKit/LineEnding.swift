@@ -14,8 +14,20 @@ public enum LineEnding: String, Sendable {
         return next < scalars.endIndex && scalars[next] == "\n" ? .crlf : .cr
     }
 
-    /// `text` with every line break (LF, CRLF or CR) written in this style.
+    /// `text` with every line break (LF, CRLF or CR) written in this style. Uses NSString's literal
+    /// replacement, which is ~25× faster than Swift Regex on large text; this runs on every save.
     public func apply(to text: String) -> String {
-        text.replacing(/\r\n|\r|\n/.matchingSemantics(.unicodeScalar), with: rawValue)
+        let hasCR = (text as NSString).range(of: "\r", options: .literal).location != NSNotFound
+        if self == .lf && !hasCR { return text }   // the common case: nothing to change
+        let result = NSMutableString(string: text)
+        let all = { NSRange(location: 0, length: result.length) }
+        if hasCR {
+            result.replaceOccurrences(of: "\r\n", with: "\n", options: .literal, range: all())
+            result.replaceOccurrences(of: "\r", with: "\n", options: .literal, range: all())
+        }
+        if self != .lf {
+            result.replaceOccurrences(of: "\n", with: rawValue, options: .literal, range: all())
+        }
+        return result as String
     }
 }

@@ -9,7 +9,7 @@
 html { background: var(--page); }
 body {
   margin: 0 auto; padding: 48px 24px 96px; max-width: 42em;
-  font: 17px/1.6 var(--body-font), -apple-system, sans-serif; color: var(--text);
+  font: 17px/1.6 /*{{body-font}}*/, -apple-system, sans-serif; color: var(--text);
   -webkit-font-smoothing: antialiased; overflow-wrap: break-word;
 }
 h1, h2, h3, h4, h5, h6 { line-height: 1.25; margin: 1.6em 0 .6em; }

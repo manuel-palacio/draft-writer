@@ -70,10 +70,22 @@ import Testing
     }
 
     @Test func exportCSSInlinesOnlyNeededFonts() {
-        let css = PreviewAssets.exportCSS(font: .quattro)
-        #expect(css.contains("--body-font: \"iA Writer Quattro\""))
-        #expect(css.contains("font-family: \"iA Writer Quattro\""))
-        #expect(css.contains("font-family: \"iA Writer Mono\""))
-        #expect(!css.contains("font-family: \"iA Writer Duo\""))
+        let css = PreviewAssets.exportCSS(font: .quattro, includesCode: true)
+        #expect(css.contains("@font-face { font-family: \"iA Writer Quattro\""))
+        #expect(css.contains("@font-face { font-family: \"iA Writer Mono\""))
+        #expect(!css.contains("@font-face { font-family: \"iA Writer Duo\""))
+        let prose = PreviewAssets.exportCSS(font: .quattro, includesCode: false)
+        #expect(!prose.contains("@font-face { font-family: \"iA Writer Mono\""))   // no code, no code font
+    }
+
+    @Test func exportCSSNamesTheFontDirectly() {
+        // Exported files may be opened by tools that drop custom properties; the body font must not depend on one.
+        let css = PreviewAssets.exportCSS(font: .quattro, includesCode: false)
+        #expect(css.contains("font: 17px/1.6 \"iA Writer Quattro\", -apple-system, sans-serif;"))
+        #expect(!css.contains("var(--body-font"))
+    }
+
+    @Test func previewCSSFallsBackToDuo() {
+        #expect(PreviewAssets.previewCSS(font: .mono).contains("var(--body-font, \"iA Writer Duo\")"))
     }
 }

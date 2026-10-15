@@ -24,7 +24,10 @@ import Testing
 
     @Test func htmlUsesChosenFont() {
         let html = Exporter.html(ExportSource(markdown: "Hi", title: "x", documentFolder: nil, font: .quattro))
-        #expect(html.contains("--body-font: \"iA Writer Quattro\""))
+        #expect(html.contains("17px/1.6 \"iA Writer Quattro\""))
+        #expect(!html.contains("@font-face { font-family: \"iA Writer Mono\""))
+        let withCode = Exporter.html(ExportSource(markdown: "Run `ls`", title: "x", documentFolder: nil, font: .quattro))
+        #expect(withCode.contains("@font-face { font-family: \"iA Writer Mono\""))
     }
 
     @Test func pdfIsPaginatedA4() async throws {

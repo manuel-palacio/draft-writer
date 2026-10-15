@@ -42,6 +42,16 @@ import Testing
         #expect(ms < 100, "normalising line endings took \(ms) ms")
     }
 
+    /// Autosave of a very large note (about 1.5 million words) must not stall.
+    @Test func lineEndingsOnHugeDocument() {
+        let huge = NSTextStorage(string: String(repeating: text + "\r\n", count: 30)).string
+        let lf = NSTextStorage(string: String(repeating: text + "\n", count: 30)).string
+        let ms = milliseconds { _ = LineEnding.crlf.apply(to: huge) }
+        #expect(ms < 200, "CRLF normalising took \(ms) ms")
+        let lfMs = milliseconds { _ = LineEnding.lf.apply(to: lf) }
+        #expect(lfMs < 50, "LF fast path took \(lfMs) ms")
+    }
+
     @Test func focusLongDocument() {
         let middle = NSRange(location: (text as NSString).length / 2, length: 0)
         let ms = milliseconds { _ = FocusController.brightRange(in: text, selection: middle, mode: .sentence) }

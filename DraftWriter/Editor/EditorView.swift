@@ -70,7 +70,9 @@ struct EditorView: NSViewRepresentable {
         private var lineIndex: LineIndex?
         private var lastReportedLine = 0
         /// Inline code and code blocks from the last full pass; never highlighted.
-        private var codeRanges: [NSRange] = []
+        private var inlineCode: [NSRange] = []
+        /// Code that part-of-speech highlighting leaves alone.
+        private var codeRanges: [NSRange] { codeBlocks + inlineCode }
         private(set) var appliedHighlightClasses: Set<LexicalClass> = []
         private let highlighter = SyntaxHighlighter()
         private static var requestedLanguages: Set<NLLanguage> = []
@@ -112,7 +114,7 @@ struct EditorView: NSViewRepresentable {
             guard let textView, let storage = textView.textStorage else { return }
             let styles = MarkdownStyler.styles(for: textView.string)
             codeBlocks = styles.filter { $0.style == .codeBlock }.map(\.range)
-            codeRanges = styles.filter { $0.style == .codeBlock || $0.style == .inlineCode }.map(\.range)
+            inlineCode = styles.filter { $0.style == .inlineCode }.map(\.range)
             AttributeApplier.applyStyles(styles, to: storage, in: NSRange(location: 0, length: storage.length),
                                          baseFont: textView.baseFont)
         }
@@ -250,14 +252,19 @@ struct EditorView: NSViewRepresentable {
         }
 
         private func shiftCodeBlocks(replacing edited: NSRange, with newLength: Int) {
-            codeBlocks = Self.shift(codeBlocks, replacing: edited, with: newLength)
-            codeRanges = Self.shift(codeRanges, replacing: edited, with: newLength)
+            // Called before the edit, so the text view still has the old length. An unclosed fence runs to the
+            // end of the document and keeps growing as you type there; inline code never does.
+            let length = (textView?.string as NSString?)?.length ?? 0
+            codeBlocks = Self.shift(codeBlocks, replacing: edited, with: newLength, documentLength: length)
+            inlineCode = Self.shift(inlineCode, replacing: edited, with: newLength)
         }
 
         /// Moves `ranges` through an edit that replaced `edited` with `newLength` characters. An end point
         /// inside the replaced text lands at the end of the new text, so the part of a range that survives a
-        /// deletion stays covered.
-        static func shift(_ ranges: [NSRange], replacing edited: NSRange, with newLength: Int) -> [NSRange] {
+        /// deletion stays covered. Text inserted right after a range isn't part of it, unless the range runs
+        /// to the end of the document (`documentLength`, before the edit) and so does the insertion.
+        static func shift(_ ranges: [NSRange], replacing edited: NSRange, with newLength: Int,
+                          documentLength: Int? = nil) -> [NSRange] {
             let delta = newLength - edited.length
             func start(_ p: Int) -> Int {
                 p < edited.location ? p : p >= NSMaxRange(edited) ? p + delta : edited.location + newLength
@@ -267,7 +274,9 @@ struct EditorView: NSViewRepresentable {
             }
             return ranges.map { range in
                 let lower = start(range.location)
-                return NSRange(location: lower, length: max(0, end(NSMaxRange(range)) - lower))
+                let atDocumentEnd = NSMaxRange(range) == documentLength && edited.location == documentLength
+                let upper = atDocumentEnd ? NSMaxRange(range) + delta : end(NSMaxRange(range))
+                return NSRange(location: lower, length: max(0, upper - lower))
             }
         }
 
