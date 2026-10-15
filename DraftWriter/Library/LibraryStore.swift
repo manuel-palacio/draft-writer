@@ -1,3 +1,4 @@
+import class AppKit.NSDocumentController
 import DraftKit
 import Foundation
 import Observation
@@ -139,8 +140,16 @@ final class LibraryStore {
         Task { await refresh() }
     }
 
+    /// Moves a note or folder to the Trash and closes the windows of the notes it held (they would
+    /// otherwise keep editing files in the Trash).
     func trash(_ url: URL) throws {
+        let path = url.resolvingSymlinksInPath().path
+        let open = NSDocumentController.shared.documents.filter { document in
+            guard let file = document.fileURL?.resolvingSymlinksInPath().path else { return false }
+            return file == path || file.hasPrefix(path + "/")
+        }
         try Library.trash(url)
+        open.forEach { $0.close() }
         if selection == url { selection = nil }
         Task { await refresh() }
     }
