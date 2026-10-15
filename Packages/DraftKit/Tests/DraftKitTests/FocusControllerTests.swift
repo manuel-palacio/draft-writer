@@ -48,4 +48,28 @@ import Testing
         #expect(FocusMode.sentence.next == .paragraph)
         #expect(FocusMode.paragraph.next == .off)
     }
+
+    @Test func sentenceInJapanese() {
+        let text = "今日は晴れです。明日は雨です。"
+        let cursor = (text as NSString).range(of: "明日").location + 1
+        let r = FocusController.brightRange(in: text, selection: NSRange(location: cursor, length: 0), mode: .sentence)
+        #expect(substring(r, of: text) == "明日は雨です。")
+    }
+
+    @Test func sentenceWithEmoji() {
+        let text = "Hi 👋🏽 there. Party time 🎉"
+        let ns = text as NSString
+        // Cursor between the two UTF-16 halves of the party emoji.
+        let cursor = ns.range(of: "🎉").location + 1
+        let r = FocusController.brightRange(in: text, selection: NSRange(location: cursor, length: 0), mode: .sentence)
+        #expect(substring(r, of: text) == "Party time 🎉")
+        let first = FocusController.brightRange(in: text, selection: NSRange(location: 4, length: 0), mode: .sentence)
+        #expect(substring(first, of: text) == "Hi 👋🏽 there.")
+    }
+
+    @Test func paragraphEndingInEmoji() {
+        let text = "One 🎉\n\nTwo"
+        let r = FocusController.brightRange(in: text, selection: NSRange(location: 1, length: 0), mode: .paragraph)
+        #expect(substring(r, of: text) == "One 🎉")
+    }
 }

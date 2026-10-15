@@ -58,4 +58,26 @@ import Testing
     @Test func crlf() {
         #expect(contains("# A\r\n*b*", "*b*", .emphasis))
     }
+
+    @Test func setextHeadingStopsAtItsUnderline() {
+        let text = "Title\n=====\n*x*"
+        #expect(contains(text, "Title\n=====", .heading(level: 1)))
+        #expect(!pairs(text).contains { $0.1 == .heading(level: 1) && $0.0.contains("*x*") })
+    }
+
+    @Test func setextHeadingAtEndOfDocument() {
+        #expect(contains("Title\n---", "Title\n---", .heading(level: 2)))
+    }
+
+    @Test func everyQuoteMarkerIsGreyed() {
+        let text = "> one\n> two\n>three"
+        let markers = MarkdownStyler.styles(for: text).filter { $0.style == .syntaxMarker }.map(\.range.location)
+        #expect(markers == [0, 6, 12])
+    }
+
+    @Test func nestedQuoteMarkersAreGreyed() {
+        let text = "> > deep"
+        let markers = MarkdownStyler.styles(for: text).filter { $0.style == .syntaxMarker }.map(\.range.location)
+        #expect(Set(markers) == [0, 2])
+    }
 }
