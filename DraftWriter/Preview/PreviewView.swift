@@ -52,6 +52,8 @@ struct PreviewView: NSViewRepresentable {
         var lastMarkdown = ""
         private var loaded = false
         private var pageRequested = false
+        private var crashedMarkdown: String?
+        private var crashes = 0
         private var pendingBody: String?
         private var waiters: [CheckedContinuation<Void, Never>] = []
         private(set) var updateTask: Task<Void, Never>?
@@ -77,6 +79,7 @@ struct PreviewView: NSViewRepresentable {
         func show(markdown: String) {
             if !pageRequested {
                 pageRequested = true
+                loaded = false
                 pageLoads += 1
                 let page = PreviewRenderer.page(for: markdown, title: "Preview", css: PreviewAssets.previewCSS(font: font))
                 webView.loadHTMLString(page, baseURL: PreviewAssets.baseURL)
@@ -150,13 +153,26 @@ struct PreviewView: NSViewRepresentable {
         }
 
         /// The page's process crashed (or was killed for memory): load the page again with the latest text.
+        /// A text that crashes it every time gets two retries, then a notice until the next edit.
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             releaseWaiters()
             loaded = false
             pageRequested = false
             lastLine = 0
-            show(markdown: lastMarkdown)
+            if crashedMarkdown == lastMarkdown { crashes += 1 } else { crashedMarkdown = lastMarkdown; crashes = 1 }
+            if crashes <= Self.crashRetries {
+                show(markdown: lastMarkdown)
+            } else {
+                webView.loadHTMLString(Self.crashNotice, baseURL: nil)
+            }
         }
+
+        static let crashRetries = 2
+        static let crashNotice = """
+        <html><body style="font: 13px -apple-system; color: gray; text-align: center; padding-top: 40vh">
+        The preview crashed while rendering this document. It will try again after your next edit.
+        </body></html>
+        """
 
         private func releaseWaiters() {
             waiters.forEach { $0.resume() }

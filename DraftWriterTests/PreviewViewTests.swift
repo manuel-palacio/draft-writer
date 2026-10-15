@@ -49,6 +49,23 @@ import WebKit
         #expect(preview.pageLoads == 2)
     }
 
+    @Test func stopsReloadingWhenThePageKeepsCrashing() async throws {
+        let preview = PreviewView.Coordinator()
+        preview.lastMarkdown = "# Heavy"
+        preview.show(markdown: "# Heavy")
+        await preview.waitUntilLoaded()
+        for _ in 0..<5 {
+            preview.webViewWebContentProcessDidTerminate(preview.webView)
+            await preview.waitUntilLoaded()
+        }
+        #expect(preview.pageLoads == 3)   // the first load and two retries, then it gives up
+        #expect(try await text(preview, "body")?.contains("crashed") == true)
+        preview.lastMarkdown = "# Lighter"
+        preview.show(markdown: "# Lighter")   // a new edit tries again
+        await preview.waitUntilLoaded()
+        #expect(try await text(preview, "#content h1") == "Lighter")
+    }
+
     @Test func usesChosenFont() async throws {
         let preview = PreviewView.Coordinator()
         preview.font = .quattro

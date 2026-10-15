@@ -103,8 +103,12 @@ public enum Library {
         return destination
     }
 
-    public static func trash(_ url: URL) throws {
-        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+    /// Moves `url` to the Trash and returns where it ended up.
+    @discardableResult
+    public static func trash(_ url: URL) throws -> URL? {
+        var trashed: NSURL?
+        try FileManager.default.trashItem(at: url, resultingItemURL: &trashed)
+        return trashed as URL?
     }
 
     static func isNote(_ url: URL) -> Bool {

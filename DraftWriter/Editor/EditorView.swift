@@ -74,6 +74,7 @@ struct EditorView: NSViewRepresentable {
         private(set) var appliedHighlightClasses: Set<LexicalClass> = []
         private let highlighter = SyntaxHighlighter()
         private static var requestedLanguages: Set<NLLanguage> = []
+        static let modelRetryDelay: Duration = .seconds(60)
 
         init(_ parent: EditorView) {
             self.parent = parent
@@ -207,7 +208,7 @@ struct EditorView: NSViewRepresentable {
 
         /// Asks NaturalLanguage to download the tagging model for each language the highlighter met without one,
         /// then re-colours. Each language is asked once per launch, unless the request failed (e.g. offline),
-        /// which is retried next time. Languages Apple has no model for (e.g. Swedish) stay uncoloured.
+        /// which is retried a minute later. Languages Apple has no model for (e.g. Swedish) stay uncoloured.
         private func requestMissingLanguageModels() {
             for language in highlighter.missingLanguages where !Self.requestedLanguages.contains(language) {
                 Self.requestedLanguages.insert(language)
@@ -215,7 +216,10 @@ struct EditorView: NSViewRepresentable {
                     Task { @MainActor in
                         switch result {
                         case .available: self?.applyRenderingColors()
-                        case .error: Self.requestedLanguages.remove(language)
+                        case .error:
+                            // Allow another try later (e.g. back online), not on every keystroke.
+                            try? await Task.sleep(for: Self.modelRetryDelay)
+                            Self.requestedLanguages.remove(language)
                         default: break
                         }
                     }

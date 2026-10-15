@@ -33,8 +33,30 @@ import Testing
         document.fileURL = note
         NSDocumentController.shared.addDocument(document)
         defer { NSDocumentController.shared.removeDocument(document) }
-        try store.trash(note)
+        try await store.trash(note)
         #expect(!NSDocumentController.shared.documents.contains(document))
+    }
+
+    /// A document with unsaved typing, saved in place like Draft Writer's (autosave in place).
+    final class EditedDocument: NSDocument {
+        var text = "typed since the last autosave"
+        override class var autosavesInPlace: Bool { true }
+        override func data(ofType typeName: String) throws -> Data { Data(text.utf8) }
+    }
+
+    @Test func trashSavesUnsavedEditsFirst() async throws {
+        let store = LibraryStore(defaults: defaults)
+        try store.choose(folder)
+        let note = folder.appending(path: "a.md")
+        let document = EditedDocument()
+        document.fileURL = note
+        document.fileType = "net.daringfireball.markdown"
+        document.updateChangeCount(.changeDone)
+        NSDocumentController.shared.addDocument(document)
+        defer { NSDocumentController.shared.removeDocument(document) }
+        let trashed = try await store.trash(note)
+        let saved = try String(contentsOf: try #require(trashed), encoding: .utf8)
+        #expect(saved == "typed since the last autosave")   // the edits went into the file before it moved
     }
 
     @Test func newNoteCommandReportsErrors() async throws {
