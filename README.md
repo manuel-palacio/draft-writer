@@ -35,6 +35,10 @@ Syntax highlighting colours nouns, verbs, adjectives, adverbs and conjunctions:
 
 ![Syntax highlighting by part of speech](docs/screenshots/highlight.png)
 
+The library sidebar shows one folder of notes as a tree, with search across names and contents:
+
+![The library sidebar beside the editor](docs/screenshots/library.png)
+
 Dark appearance:
 
 ![The editor in dark mode](docs/screenshots/dark.png)
