@@ -57,9 +57,32 @@ Dark appearance:
 | ⌥⌘N | New note in the library |
 | ⌘, | Settings (font, size, line width, appearance) |
 
+## Install
+
+There are no downloadable releases yet, so you build the app yourself. It runs on macOS 15 or later.
+
+**On the Mac where you'll use it.** Install Xcode 26 or later from the App Store, then:
+
+    brew install xcodegen
+    git clone https://github.com/manuel-palacio/draft-writer.git
+    cd draft-writer
+    xcodegen generate
+    xcodebuild -project DraftWriter.xcodeproj -scheme DraftWriter -configuration Release \
+      -derivedDataPath .build/release build
+    cp -R ".build/release/Build/Products/Release/Draft Writer.app" /Applications/
+
+**On another Mac, without Xcode.** Copy `Draft Writer.app` from a Mac that built it (AirDrop, a USB
+stick, a shared folder) into Applications. The app isn't signed with an Apple Developer ID, so macOS
+blocks it the first time. Try to open it once, then go to System Settings > Privacy & Security and
+click **Open Anyway**. Running this in Terminal does the same:
+
+    xattr -dr com.apple.quarantine "/Applications/Draft Writer.app"
+
+To update, pull the latest code, run the build again and replace the app.
+
 ## Build
 
-Requires macOS 15+ and Xcode 26+.
+For development. Requires macOS 15+ and Xcode 26+.
 
     brew install xcodegen
     xcodegen generate
