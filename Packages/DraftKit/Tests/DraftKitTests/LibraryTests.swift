@@ -54,12 +54,12 @@ import Testing
         let byName = try file("apple.md", "x")
         let byContent = try file("notes.md", "An Apple a day")
         try file("other.md", "nothing")
-        #expect(try Library.search(root, query: "apple").map(\.lastPathComponent) == [byName.lastPathComponent, byContent.lastPathComponent])
+        #expect(Library.search(root, query: "apple").map(\.lastPathComponent) == [byName.lastPathComponent, byContent.lastPathComponent])
     }
 
     @Test func searchSkipsHugeFiles() throws {
         try file("huge.md", String(repeating: "x", count: Library.maxSearchFileSize + 1) + " needle")
-        #expect(try Library.search(root, query: "needle").isEmpty)
+        #expect(Library.search(root, query: "needle").isEmpty)
     }
 
     @Test func untitledNumbering() throws {

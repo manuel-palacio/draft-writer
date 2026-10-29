@@ -52,6 +52,26 @@ import Testing
         #expect(lfMs < 50, "LF fast path took \(lfMs) ms")
     }
 
+    /// Typing in the library search box: a query over 2,000 notes of a few KB each, on a warm index.
+    @Test func searchTwoThousandNotes() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "perf-library-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let words = text.split(separator: " ")
+        for number in 0..<2_000 {
+            let start = (number * 500) % (words.count - 500)
+            let note = words[start..<start + 500].joined(separator: " ")   // about 3 KB
+            try note.write(to: root.appending(path: "Note \(number).md"), atomically: false, encoding: .utf8)
+        }
+        var index = LibraryIndex(root: root)
+        index.refresh()
+        let refreshMs = milliseconds { index.refresh() }
+        let ms = milliseconds { _ = index.search("Zürich harbour") }
+        #expect(ms < 50, "searching 2,000 notes took \(ms) ms")
+        #expect(refreshMs < 50, "refreshing an unchanged index of 2,000 notes took \(refreshMs) ms")
+        print("library search: query \(ms) ms, unchanged refresh \(refreshMs) ms")
+    }
+
     @Test func focusLongDocument() {
         let middle = NSRange(location: (text as NSString).length / 2, length: 0)
         let ms = milliseconds { _ = FocusController.brightRange(in: text, selection: middle, mode: .sentence) }

@@ -141,6 +141,21 @@ import Testing
         #expect(store.searchResults.map(\.lastPathComponent) == ["notes.md"])
     }
 
+    /// The folder watcher refreshes the search index, so results follow edits made outside the app.
+    @Test func searchResultsFollowEditsOnDisk() async throws {
+        let store = LibraryStore(defaults: defaults)
+        try store.choose(folder)
+        store.query = "banana"
+        try await Task.sleep(for: LibraryStore.queryDelay * 2)   // the debounced search must not be what picks up the edit
+        await store.refresh()
+        #expect(store.searchResults.isEmpty)
+        try "a banana".write(to: folder.appending(path: "a.md"), atomically: true, encoding: .utf8)
+        for _ in 0..<100 where store.searchResults.isEmpty {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(store.searchResults.map(\.lastPathComponent) == ["a.md"])
+    }
+
     @Test func newNoteGoesToRootOrFolder() async throws {
         let store = LibraryStore(defaults: defaults)
         try store.choose(folder)
