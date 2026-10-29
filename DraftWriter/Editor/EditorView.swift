@@ -44,11 +44,7 @@ struct EditorView: NSViewRepresentable {
         if textView.typewriter != typewriter { textView.typewriter = typewriter }
         let focusChanged = coordinator.appliedFocusMode != focusMode || coordinator.appliedHighlightClasses != highlightClasses
         if textView.string != text {
-            // External change (revert, undo through the document): replace and keep the caret in range.
-            let caret = min(textView.selectedRange().location, (text as NSString).length)
-            textView.string = text
-            coordinator.textReplaced()
-            textView.setSelectedRange(NSRange(location: caret, length: 0))
+            coordinator.replaceText(with: text)
             needsRestyle = true
         }
         if needsRestyle { coordinator.restyleAll() }
@@ -88,8 +84,17 @@ struct EditorView: NSViewRepresentable {
             return true
         }
 
-        /// The text was replaced from outside (revert, document undo).
-        func textReplaced() { lineIndex = nil }
+        /// External change (revert, undo through the document): replaces the text, keeps the caret in range,
+        /// and clears the undo stack, whose steps refer to ranges of the old text. (NSTextView registers its
+        /// steps with a private target, so they can't be removed selectively.)
+        func replaceText(with text: String) {
+            guard let textView else { return }
+            let caret = min(textView.selectedRange().location, (text as NSString).length)
+            textView.string = text
+            textView.undoManager?.removeAllActions()
+            lineIndex = nil
+            textView.setSelectedRange(NSRange(location: caret, length: 0))
+        }
 
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }

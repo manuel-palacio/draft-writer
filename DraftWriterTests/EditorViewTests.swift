@@ -83,6 +83,20 @@ final class EditorHarness {
         #expect(h.font(at: 1)?.fontName == "iAWriterDuoS-Italic")
     }
 
+    @Test func undoAfterExternalReplacementIsSafe() throws {
+        let h = EditorHarness()
+        h.type("a long line of typed text")
+        let undo = try #require(h.textView.undoManager)
+        #expect(undo.canUndo)
+        h.coordinator.replaceText(with: "short")
+        #expect(!undo.canUndo)   // the typing steps referred to ranges of the old text
+        undo.undo()
+        #expect(h.textView.string == "short")
+        h.type("!")
+        undo.undo()
+        #expect(h.textView.string == "short")
+    }
+
     @Test func externalChangeReplacesText() {
         let h = EditorHarness(initial: "old")
         h.textView.string = "new *text*"
