@@ -28,6 +28,7 @@ import Testing
     @Test func typingInLongDocumentWithHighlighting() {
         let h = EditorHarness(initial: Self.longText)
         h.coordinator.parent.highlightClasses = Set(LexicalClass.allCases)
+        h.coordinator.parent.styleChecks = Set(StyleCheck.allCases)
         h.textView.setSelectedRange(NSRange(location: (Self.longText as NSString).length / 2, length: 0))
         h.coordinator.applyRenderingColors()   // warm the paragraph cache, as scrolling there would
         let ms = milliseconds { h.type("x") }
@@ -39,6 +40,7 @@ import Testing
         let h = EditorHarness(initial: Self.longText)
         h.coordinator.parent.focusMode = .sentence
         h.coordinator.parent.highlightClasses = Set(LexicalClass.allCases)
+        h.coordinator.parent.styleChecks = Set(StyleCheck.allCases)
         let middle = (Self.longText as NSString).length / 2
         h.textView.setSelectedRange(NSRange(location: middle, length: 0))   // warms the paragraph cache
         let ms = milliseconds {

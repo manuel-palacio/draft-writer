@@ -61,20 +61,32 @@ enum Theme {
         .adverb: (0x9333EA, 0xC08AF5), .conjunction: (0x059669, 0x4CC9A0),
     ]
 
-    private static let highlightColors: [LexicalClass: (normal: NSColor, dimmed: NSColor)] = {
-        func rgb(_ hex: UInt32, _ alpha: CGFloat) -> NSColor {
-            NSColor(srgbRed: CGFloat(hex >> 16 & 0xFF) / 255, green: CGFloat(hex >> 8 & 0xFF) / 255,
-                     blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
-        }
-        return highlightHues.mapValues { hue in
-            (dynamic(light: rgb(hue.light, 1), dark: rgb(hue.dark, 1)),
-             dynamic(light: rgb(hue.light, 0.3), dark: rgb(hue.dark, 0.3)))
-        }
-    }()
+    // Style-check colours, apart from the part-of-speech hues: slate fillers, cyan clichés, crimson redundancies.
+    private static let styleCheckHues: [StyleCheck: (light: UInt32, dark: UInt32)] = [
+        .filler: (0x64748B, 0x94A3B8), .cliche: (0x0891B2, 0x22D3EE), .redundancy: (0xE11D48, 0xFB7185),
+    ]
+
+    private static let highlightColors = highlightHues.mapValues(colorPair)
+    private static let styleCheckColors = styleCheckHues.mapValues(colorPair)
 
     static func highlight(_ lexicalClass: LexicalClass, dimmed: Bool) -> NSColor {
         let colors = highlightColors[lexicalClass]!
         return dimmed ? colors.dimmed : colors.normal
+    }
+
+    static func highlight(_ check: StyleCheck, dimmed: Bool) -> NSColor {
+        let colors = styleCheckColors[check]!
+        return dimmed ? colors.dimmed : colors.normal
+    }
+
+    /// A hue at full strength and at focus-mode opacity, each adapting to light and dark appearance.
+    private static func colorPair(_ hue: (light: UInt32, dark: UInt32)) -> (normal: NSColor, dimmed: NSColor) {
+        func rgb(_ hex: UInt32, _ alpha: CGFloat) -> NSColor {
+            NSColor(srgbRed: CGFloat(hex >> 16 & 0xFF) / 255, green: CGFloat(hex >> 8 & 0xFF) / 255,
+                     blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
+        }
+        return (dynamic(light: rgb(hue.light, 1), dark: rgb(hue.dark, 1)),
+                dynamic(light: rgb(hue.light, 0.3), dark: rgb(hue.dark, 0.3)))
     }
 
     private static func dynamic(light: NSColor, dark: NSColor) -> NSColor {

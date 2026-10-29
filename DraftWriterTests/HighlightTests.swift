@@ -76,4 +76,51 @@ import Testing
         h.window.contentView?.layoutSubtreeIfNeeded()
         #expect(renderingColor(h, at: offset(of: "dog", in: h)) === Theme.highlight(.noun, dimmed: false))
     }
+
+    func styleHarness(_ text: String, checks: Set<StyleCheck> = Set(StyleCheck.allCases),
+                      classes: Set<LexicalClass> = Set(LexicalClass.allCases)) -> EditorHarness {
+        let h = EditorHarness(initial: text)
+        h.coordinator.parent.highlightClasses = classes
+        h.coordinator.parent.styleChecks = checks
+        h.coordinator.applyRenderingColors()
+        return h
+    }
+
+    @Test func styleChecksColourMatchesOverPartOfSpeech() {
+        let h = styleHarness("It was really an added bonus, at the end of the day.")
+        #expect(renderingColor(h, at: offset(of: "really", in: h)) === Theme.highlight(.filler, dimmed: false))
+        #expect(renderingColor(h, at: offset(of: "bonus", in: h)) === Theme.highlight(.redundancy, dimmed: false))
+        #expect(renderingColor(h, at: offset(of: "day", in: h)) === Theme.highlight(.cliche, dimmed: false))
+    }
+
+    @Test func styleChecksWorkWithoutPartOfSpeech() {
+        let h = styleHarness("The fox was very quick.", classes: [])
+        #expect(renderingColor(h, at: offset(of: "very", in: h)) === Theme.highlight(.filler, dimmed: false))
+        #expect(renderingColor(h, at: offset(of: "fox", in: h)) == nil)
+    }
+
+    @Test func disabledStyleCheckIsPlain() {
+        let h = styleHarness("It was really an added bonus.", checks: [.redundancy], classes: [])
+        #expect(renderingColor(h, at: offset(of: "really", in: h)) == nil)
+        #expect(renderingColor(h, at: offset(of: "added", in: h)) === Theme.highlight(.redundancy, dimmed: false))
+        h.coordinator.parent.styleChecks = []
+        h.coordinator.applyRenderingColors()
+        #expect(renderingColor(h, at: offset(of: "added", in: h)) == nil)
+    }
+
+    @Test func styleChecksDimOutsideFocus() {
+        let h = EditorHarness(initial: "It was really late. The end result was fine.")
+        h.coordinator.parent.styleChecks = Set(StyleCheck.allCases)
+        h.coordinator.parent.focusMode = .sentence
+        h.textView.setSelectedRange(NSRange(location: offset(of: "fine", in: h), length: 0))
+        h.coordinator.applyRenderingColors()
+        #expect(renderingColor(h, at: offset(of: "really", in: h)) === Theme.highlight(.filler, dimmed: true))
+        #expect(renderingColor(h, at: offset(of: "result", in: h)) === Theme.highlight(.redundancy, dimmed: false))
+    }
+
+    @Test func styleChecksSkipCode() {
+        let h = styleHarness("Run `really` now, it is really quick.", classes: [])
+        #expect(renderingColor(h, at: offset(of: "`really`", in: h) + 1) == nil)
+        #expect(renderingColor(h, at: offset(of: "is really", in: h) + 3) === Theme.highlight(.filler, dimmed: false))
+    }
 }
