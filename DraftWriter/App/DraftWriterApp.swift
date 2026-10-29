@@ -25,7 +25,6 @@ struct DraftWriterApp: App {
         }
         Settings {
             SettingsView(settings: settings)
-                .onAppear { NSApp.appearance = settings.appearance.nsAppearance }
         }
     }
 }

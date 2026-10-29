@@ -40,7 +40,7 @@ final class EditorSettings {
     var appearance: Appearance {
         didSet {
             store(appearance.rawValue, "appearance")
-            NSApp?.appearance = appearance.nsAppearance
+            applyAppearance()
         }
     }
     var focusMode: FocusMode { didSet { store(focusMode.rawValue, "focusMode") } }
@@ -70,9 +70,14 @@ final class EditorSettings {
         syntaxHighlight = defaults.bool(forKey: "syntaxHighlight")
         highlightClasses = (defaults.stringArray(forKey: "highlightClasses")).map { Set($0.compactMap(LexicalClass.init)) }
             ?? Set(LexicalClass.allCases)
+        applyAppearance()   // `didSet` doesn't run in `init`, and windows must open in the stored appearance
     }
 
     var editorFont: NSFont { Theme.font(font, size: fontSize) }
+
+    private func applyAppearance() {
+        NSApp?.appearance = appearance.nsAppearance
+    }
 
     private func store(_ value: Any, _ key: String) {
         defaults.set(value, forKey: key)
