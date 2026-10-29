@@ -156,6 +156,30 @@ import Testing
         #expect(store.searchResults.map(\.lastPathComponent) == ["a.md"])
     }
 
+    @Test func tagsAreListedAndHashQueryFiltersByTag() async throws {
+        try "Plan #Work".write(to: folder.appending(path: "plan.md"), atomically: true, encoding: .utf8)
+        try "#work and #home".write(to: folder.appending(path: "list.md"), atomically: true, encoding: .utf8)
+        let store = LibraryStore(defaults: defaults)
+        try store.choose(folder)
+        await store.refresh()
+        #expect(store.tags == ["home", "work"])
+        store.query = "#work"
+        await store.refresh()
+        #expect(store.searchResults.map(\.lastPathComponent) == ["list.md", "plan.md"])
+    }
+
+    @Test func wikilinkTargetsAreFoundOrCreated() async throws {
+        let store = LibraryStore(defaults: defaults)
+        try store.choose(folder)
+        await store.refresh()
+        #expect(store.note(named: "NOTES")?.lastPathComponent == "notes.md")
+        #expect(store.note(named: "Missing") == nil)
+        let created = try store.createNote(named: "Missing")
+        #expect(created.standardizedFileURL == folder.appending(path: "Missing.md").standardizedFileURL)
+        await store.refresh()
+        #expect(store.note(named: "missing") != nil)
+    }
+
     @Test func newNoteGoesToRootOrFolder() async throws {
         let store = LibraryStore(defaults: defaults)
         try store.choose(folder)

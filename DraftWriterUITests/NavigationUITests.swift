@@ -37,6 +37,36 @@ final class NavigationUITests: XCTestCase {
         XCTAssertEqual(editor.value as? String, "# One\n\nfirst\n\nX## Two\n\nsecond\n\n### Three\n\nthird")
     }
 
+    func testCommandClickOnAWikilinkOpensTheNote() throws {
+        let library = try makeLibrary(["Alpha.md": "Alpha body", "Beta.md": "Beta body"])
+        launchWithUntitledDocument(arguments: ["-DraftLibraryPath", library.path])
+        commandClickFirstLine(filledWith: "[[Beta]]")
+        let opened = app.textViews.matching(NSPredicate(format: "value == %@", "Beta body")).firstMatch
+        XCTAssertTrue(opened.waitForExistence(timeout: 15))
+    }
+
+    func testCommandClickOnAMissingWikilinkOffersToCreateTheNote() throws {
+        let library = try makeLibrary(["Alpha.md": "Alpha body"])
+        launchWithUntitledDocument(arguments: ["-DraftLibraryPath", library.path])
+        commandClickFirstLine(filledWith: "[[Gamma]]")
+        let create = app.buttons["Create Note"]
+        XCTAssertTrue(create.waitForExistence(timeout: 10))
+        create.click()
+        let created = library.appending(path: "Gamma.md")
+        let exists = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in FileManager.default.fileExists(atPath: created.path) },
+                                               object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [exists], timeout: 10), .completed)
+        XCTAssertTrue(app.windows["Gamma"].waitForExistence(timeout: 15) || app.windows["Gamma.md"].waitForExistence(timeout: 1))
+    }
+
+    /// Types `link` until it fills the first line (one long word, so it wraps mid-link), then ⌘-clicks that line.
+    private func commandClickFirstLine(filledWith link: String) {
+        let editor = app.textViews.firstMatch
+        editor.typeText(String(repeating: link, count: 30))
+        let firstLine = editor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(CGVector(dx: 0, dy: 52))
+        XCUIElement.perform(withKeyModifiers: .command) { firstLine.click() }
+    }
+
     private func launchWithUntitledDocument(arguments: [String]) {
         app = XCUIApplication()
         app.launchArguments = arguments + ["-ApplePersistenceIgnoreState", "YES"]

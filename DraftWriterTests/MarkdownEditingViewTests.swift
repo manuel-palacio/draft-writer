@@ -102,6 +102,20 @@ import Testing
         #expect(opened == [URL(string: "https://example.com")!, URL(string: "mailto:a@b.c")!])
     }
 
+    @Test func commandClickOnAWikilinkOpensTheNoteByName() {
+        let text = "See [[Other Note]] and [site](https://example.com)"
+        let h = harness(text, selection: NSRange(location: 0, length: 0))
+        var names: [String] = []
+        var opened: [URL] = []
+        h.textView.openWikilink = { names.append($0) }
+        h.textView.openURL = { opened.append($0) }
+        let ns = text as NSString
+        #expect(h.textView.openLink(at: ns.range(of: "Other").location))
+        #expect(h.textView.openLink(at: ns.range(of: "site").location))
+        #expect(names == ["Other Note"])
+        #expect(opened == [URL(string: "https://example.com")!])
+    }
+
     @Test func commandClickEventOpensTheLinkUnderThePointer() throws {
         let h = harness("[site](https://example.com)", selection: NSRange(location: 0, length: 0))
         h.window.layoutIfNeeded()

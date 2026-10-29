@@ -76,8 +76,7 @@ public enum Library {
 
     /// Renames in place; keeps the original extension when `newName` has none. Never replaces a file.
     public static func rename(_ url: URL, to newName: String) throws -> URL {
-        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !trimmed.contains("/"), !trimmed.hasPrefix(".") else { throw LibraryError.invalidName(newName) }
+        let trimmed = try validatedName(newName)
         // "Meeting 2026.10.14" has the "extension" 14: keep the note's own extension unless the new
         // name ends in one the library recognises.
         let typed = (trimmed as NSString).pathExtension.lowercased()
@@ -93,6 +92,13 @@ public enum Library {
         var trashed: NSURL?
         try FileManager.default.trashItem(at: url, resultingItemURL: &trashed)
         return trashed as URL?
+    }
+
+    /// `name` trimmed, if it can be a file name in the library: not empty, no `/`, not hidden.
+    static func validatedName(_ name: String) throws -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains("/"), !trimmed.hasPrefix(".") else { throw LibraryError.invalidName(name) }
+        return trimmed
     }
 
     static func isNote(_ url: URL) -> Bool {

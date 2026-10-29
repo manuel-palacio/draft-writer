@@ -74,6 +74,16 @@ struct LibrarySidebar: View {
                     row(name: item.isFolder ? item.name : (item.name as NSString).deletingPathExtension,
                         url: item.url, isFolder: item.isFolder)
                 }
+                if !store.tags.isEmpty {
+                    Section("Tags") {
+                        ForEach(store.tags, id: \.self) { tag in
+                            // Searching for "#tag" lists exactly the notes with that tag.
+                            Button { store.query = "#\(tag)" } label: { Label(tag, systemImage: "number") }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("tag-\(tag)")
+                        }
+                    }
+                }
             }
             .contextMenu {
                 Button("Choose Another Folder…") { chooseFolder() }

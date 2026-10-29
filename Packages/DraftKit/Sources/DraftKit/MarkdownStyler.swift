@@ -5,6 +5,7 @@ public enum MarkdownStyle: Hashable, Sendable {
     case heading(level: Int)
     case emphasis, strong, strikethrough, inlineCode, codeBlock
     case link, linkDestination
+    case wikilink, tag
     case blockQuote, listMarker, syntaxMarker
 }
 
@@ -28,7 +29,8 @@ public enum MarkdownStyler {
         text.makeContiguousUTF8()
         var walker = StyleWalker(text: text)
         walker.visit(Document(parsing: text))
-        return walker.styles
+        let excluded = walker.styles.filter { [.codeBlock, .inlineCode, .linkDestination].contains($0.style) }.map(\.range)
+        return walker.styles + NoteLinks.styles(in: text, excluding: excluded)
     }
 }
 

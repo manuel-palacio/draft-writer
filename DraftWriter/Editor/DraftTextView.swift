@@ -84,8 +84,16 @@ final class DraftTextView: NSTextView {
     /// Opens web and mail links in their default apps (replaceable in tests).
     var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
 
-    /// ⌘-click: opens the http(s) or mailto link at `location`. Returns false (a normal click) if there is none.
+    /// Opens a `[[Note]]` by name (set by the window, which knows the library).
+    var openWikilink: ((String) -> Void)?
+
+    /// ⌘-click: opens the wikilink, or the http(s) or mailto link, at `location`. Returns false (a normal click)
+    /// if there is none.
     func openLink(at location: Int) -> Bool {
+        if let openWikilink, let name = NoteLinks.wikilink(in: string, at: location) {
+            openWikilink(name)
+            return true
+        }
         guard let destination = MarkdownEditing.linkDestination(in: string, at: location),
               let url = URL(string: destination), PreviewView.Coordinator.opensExternally(url) else { return false }
         openURL(url)

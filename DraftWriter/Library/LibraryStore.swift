@@ -13,6 +13,8 @@ final class LibraryStore {
     private(set) var root: URL?
     private(set) var items: [LibraryItem] = []
     private(set) var searchResults: [URL] = []
+    /// Every `#tag` in the library's notes, lowercased and sorted.
+    private(set) var tags: [String] = []
     var sort: LibrarySort {
         didSet {
             defaults.set(sort.rawValue, forKey: "librarySort")
@@ -116,7 +118,7 @@ final class LibraryStore {
         } else {
             await refreshIndex()
             let index = index
-            let found = await Task.detached { index?.search(query) ?? [] }.value
+            let found = await Task.detached { index?.results(for: query) ?? [] }.value
             guard !Task.isCancelled, root == self.root, query == self.query else { return }
             searchResults = found
         }
@@ -133,6 +135,8 @@ final class LibraryStore {
         // Only the newest refresh may store its index: an older one could undo a change a newer one saw.
         guard !Task.isCancelled, refreshed.root == root else { return }
         self.index = refreshed
+        let tags = refreshed.tags
+        if tags != self.tags { self.tags = tags }
     }
 
     /// A library root must exist and must not be in the Trash (Finder "deletes" folders by moving them there,
@@ -142,6 +146,19 @@ final class LibraryStore {
         var relationship = FileManager.URLRelationship.other
         try? FileManager.default.getRelationship(&relationship, of: .trashDirectory, in: .userDomainMask, toItemAt: url)
         return relationship != .contains && !url.resolvingSymlinksInPath().pathComponents.contains(".Trash")
+    }
+
+    /// The library note a `[[name]]` link points to.
+    func note(named name: String) -> URL? {
+        Library.note(named: name, in: Library.notes(in: items).map(\.url))
+    }
+
+    /// Creates `<name>.md` in the target folder, for a `[[name]]` link to a note that doesn't exist yet.
+    func createNote(named name: String) throws -> URL {
+        guard let target = targetFolder else { throw CocoaError(.fileNoSuchFile) }
+        let url = try Library.createNote(named: name, in: target)
+        Task { await refresh() }
+        return url
     }
 
     func newNote(in folder: URL?) throws -> URL {

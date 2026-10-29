@@ -33,9 +33,11 @@ enum AttributeApplier {
         case .inlineCode, .codeBlock:
             storage.addAttribute(.font, value: Theme.font(.mono, size: size), range: r)
             storage.addAttribute(.backgroundColor, value: Theme.codeBackground, range: r)
-        case .link:
+        case .link, .wikilink:
             storage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: r)
             storage.addAttribute(.underlineColor, value: Theme.marker, range: r)
+        case .tag:
+            storage.addAttribute(.foregroundColor, value: Theme.link, range: r)
         case .listMarker:
             storage.addAttribute(.foregroundColor, value: Theme.marker, range: r)
             applyHangingIndent(after: r, in: storage, baseFont: baseFont)

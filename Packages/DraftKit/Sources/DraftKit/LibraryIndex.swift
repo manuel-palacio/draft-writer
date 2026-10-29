@@ -15,6 +15,7 @@ public struct LibraryIndex: Sendable {
         let foldedName: [UInt8]
         /// nil for notes larger than `Library.maxSearchFileSize`: they match by name only.
         let foldedText: [UInt8]?
+        let tags: Set<String>
     }
 
     private static let keys: Set<URLResourceKey> = [.contentModificationDateKey, .fileSizeKey]
@@ -57,6 +58,26 @@ public struct LibraryIndex: Sendable {
         return byName + byText
     }
 
+    /// What the sidebar's search shows: a single `#tag` lists the notes with that tag; anything else is `search`.
+    public func results(for query: String) -> [URL] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("#"), trimmed.count > 1, !trimmed.contains(where: \.isWhitespace) {
+            return notes(taggedWith: String(trimmed.dropFirst()))
+        }
+        return search(query)
+    }
+
+    /// Every tag in the library, lowercased and sorted.
+    public var tags: [String] {
+        Set(entries.flatMap(\.tags)).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    /// Notes carrying `tag` (any case, without the `#`), sorted by path.
+    public func notes(taggedWith tag: String) -> [URL] {
+        let tag = tag.lowercased()
+        return entries.filter { $0.tags.contains(tag) }.map(\.url)
+    }
+
     private func noteURLs() -> [URL] {
         let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: Array(Self.keys),
                                                         options: [.skipsHiddenFiles, .skipsPackageDescendants])
@@ -66,7 +87,8 @@ public struct LibraryIndex: Sendable {
     private static func entry(for url: URL, modified: Date, size: Int) -> Entry {
         let text = size <= Library.maxSearchFileSize ? (try? Data(contentsOf: url)).map { TextDecoding.decode($0).text } : nil
         return Entry(url: url, path: url.path, modified: modified, size: size,
-                     foldedName: fold(url.deletingPathExtension().lastPathComponent), foldedText: text.map(fold))
+                     foldedName: fold(url.deletingPathExtension().lastPathComponent), foldedText: text.map(fold),
+                     tags: text.map(NoteLinks.tags) ?? [])
     }
 
     /// UTF-8 bytes, because a byte search is many times faster than `String.contains` on Foundation strings.

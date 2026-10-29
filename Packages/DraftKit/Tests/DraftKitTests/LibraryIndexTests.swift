@@ -45,6 +45,20 @@ import Testing
         #expect(index.search("  café  ").map(\.lastPathComponent) == ["Café.md"])
     }
 
+    @Test func collectsTagsAndFindsTaggedNotes() throws {
+        try file("b.md", "Plan #Work and #ideas")
+        try file("a.md", "#work only")
+        try file("c.md", "`#code` is not a tag")
+        var index = indexed()
+        #expect(index.tags == ["ideas", "work"])
+        #expect(index.notes(taggedWith: "WORK").map(\.lastPathComponent) == ["a.md", "b.md"])
+        try file("c.md", "now #work too", modified: Date().addingTimeInterval(10))
+        index.refresh()
+        #expect(index.notes(taggedWith: "work").map(\.lastPathComponent) == ["a.md", "b.md", "c.md"])
+        #expect(index.results(for: "#ideas").map(\.lastPathComponent) == ["b.md"])
+        #expect(index.results(for: "plan").map(\.lastPathComponent) == ["b.md"])
+    }
+
     @Test func emptyQueryFindsNothing() throws {
         try file("a.md", "x")
         #expect(indexed().search(" ").isEmpty)

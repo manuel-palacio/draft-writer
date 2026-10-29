@@ -34,6 +34,15 @@ import Testing
         #expect(h.color(at: 2) == Theme.text)   // the alt text
     }
 
+    @Test func wikilinksAndTagsAreStyled() {
+        let text = "See [[Note]] #idea"
+        let h = EditorHarness(initial: text)
+        let underline = h.textView.textStorage?.attribute(.underlineStyle, at: 6, effectiveRange: nil) as? Int
+        #expect(underline == NSUnderlineStyle.single.rawValue)
+        #expect(h.color(at: 4) == Theme.marker)   // [[
+        #expect(h.color(at: (text as NSString).range(of: "#idea").location) == Theme.link)
+    }
+
     @Test func listItemsHaveHangingIndent() throws {
         let h = EditorHarness(initial: "- a long list item that wraps")
         let style = try #require(h.textView.textStorage?.attribute(.paragraphStyle, at: 3, effectiveRange: nil) as? NSParagraphStyle)

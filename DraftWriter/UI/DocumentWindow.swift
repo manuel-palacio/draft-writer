@@ -18,6 +18,7 @@ struct DocumentWindow: View {
     @State private var bannerDismissed = false
     @State private var topLine = 1
     @State private var jump: EditorJump?
+    @State private var wikilink: String?
 
     var body: some View {
         NavigationSplitView(columnVisibility: libraryVisibility) {
@@ -34,7 +35,8 @@ struct DocumentWindow: View {
                                focusMode: settings.focusMode, highlightClasses: settings.activeHighlightClasses,
                                styleChecks: settings.activeStyleChecks,
                                typewriter: settings.typewriter,
-                               onTopLineChange: settings.showPreview ? { topLine = $0 } : nil, jump: jump)
+                               onTopLineChange: settings.showPreview ? { topLine = $0 } : nil, jump: jump,
+                               onOpenWikilink: { wikilink = $0 })
                         .frame(minWidth: 360)
                     if settings.showPreview {
                         PreviewView(markdown: document.text, documentFolder: fileURL?.deletingLastPathComponent(),
@@ -58,6 +60,7 @@ struct DocumentWindow: View {
                                                          font: settings.font, templateCSS: templates.css))
         .task(id: StatsInput(text: document.text, selection: selection)) { await updateStats() }
         .navigationPalettes(text: document.text, library: library, jump: $jump)
+        .wikilinkOpening(library: library, name: $wikilink)
     }
 
     /// ⌘1 / View > Show Library, kept in sync with the sidebar's own toggle button.

@@ -19,6 +19,8 @@ struct EditorView: NSViewRepresentable {
     var onTopLineChange: ((Int) -> Void)? = nil
     /// Where Jump to Heading last asked the caret to go.
     var jump: EditorJump? = nil
+    /// Called with the note name when a `[[Note]]` link is ⌘-clicked.
+    var onOpenWikilink: ((String) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -31,6 +33,7 @@ struct EditorView: NSViewRepresentable {
         textView.columnWidth = columnWidth
         textView.string = text
         textView.typewriter = typewriter
+        textView.openWikilink = onOpenWikilink
         context.coordinator.textView = textView
         context.coordinator.observeScrolling(of: scrollView)
         context.coordinator.restyleAll()
@@ -41,6 +44,7 @@ struct EditorView: NSViewRepresentable {
         let coordinator = context.coordinator
         coordinator.parent = self
         guard let textView = coordinator.textView else { return }
+        textView.openWikilink = onOpenWikilink
         var needsRestyle = false
         if textView.baseFont != font {
             textView.baseFont = font
