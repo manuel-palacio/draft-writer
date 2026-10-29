@@ -13,6 +13,7 @@ struct DocumentWindow: View {
     var templates: TemplateFolder = .shared
     @State private var selection = NSRange(location: 0, length: 0)
     @State private var stats = TextStats(words: 0, characters: 0, readingMinutes: 0)
+    @State private var documentWords = 0
     @State private var isTyping = false
     @State private var bannerDismissed = false
     @State private var topLine = 1
@@ -41,7 +42,7 @@ struct DocumentWindow: View {
                             .frame(minWidth: 320)
                     }
                 }
-                StatsFooter(stats: stats)
+                StatsFooter(stats: stats, documentWords: documentWords, fileURL: fileURL)
                     .padding(.vertical, 6)
                     .opacity(isTyping ? 0 : 1)
             }
@@ -84,9 +85,13 @@ struct DocumentWindow: View {
         do { try await Task.sleep(for: Self.statsDelay) } catch { return }
         let text = document.text as NSString
         let selected = NSIntersectionRange(selection, NSRange(location: 0, length: text.length))
-        let source = selected.length > 0 ? text.substring(with: selected) : document.text
-        let result = await Task.detached { TextStats.compute(source) }.value
-        if !Task.isCancelled { stats = result }
+        let whole = document.text
+        let source = selected.length > 0 ? text.substring(with: selected) : whole
+        let (result, words) = await Task.detached {
+            let stats = TextStats.compute(source)
+            return (stats, selected.length > 0 ? TextStats.countWords(in: whole) : stats.words)
+        }.value
+        if !Task.isCancelled { (stats, documentWords) = (result, words) }
     }
 
     private struct StatsInput: Equatable {
