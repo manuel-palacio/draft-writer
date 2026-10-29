@@ -15,6 +15,8 @@ struct EditorView: NSViewRepresentable {
     var typewriter = false
     /// Called with the 1-based source line at the top of the visible area when the editor scrolls.
     var onTopLineChange: ((Int) -> Void)? = nil
+    /// Where Jump to Heading last asked the caret to go.
+    var jump: EditorJump? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -53,6 +55,7 @@ struct EditorView: NSViewRepresentable {
         }
         if needsRestyle { coordinator.restyleAll() }
         if focusChanged || needsRestyle { coordinator.applyFocus() }
+        if let jump, jump != coordinator.lastJump { coordinator.reveal(jump) }
     }
 
     @MainActor
@@ -64,6 +67,8 @@ struct EditorView: NSViewRepresentable {
         private var pendingRestyle: Task<Void, Never>?
         private var lastEditedRange: NSRange?
         private(set) var appliedFocusMode: FocusMode = .off
+        /// The last jump carried out, so a view update doesn't repeat it.
+        var lastJump: EditorJump?
         /// Fenced code blocks from the last full pass, shifted as text is edited, so the fast path
         /// can re-parse a whole block instead of a fragment that loses its fences.
         private var codeBlocks: [NSRange] = []

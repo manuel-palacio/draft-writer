@@ -12,6 +12,12 @@ struct DraftWriterApp: App {
         }
         #endif
         LibraryStore.shared.restore()
+        #if DEBUG
+        // UI tests point the library at a folder in the app's container: `-DraftLibraryPath <path>`.
+        if let path = UserDefaults.standard.string(forKey: "DraftLibraryPath") {
+            LibraryStore.shared.activateForTesting(URL(filePath: path, directoryHint: .isDirectory))
+        }
+        #endif
     }
 
     var body: some Scene {
@@ -22,6 +28,7 @@ struct DraftWriterApp: App {
             EditorCommands(settings: settings)
             ExportCommands(settings: settings)
             LibraryCommands(settings: settings, store: library)
+            NavigationCommands(store: library)
         }
         Settings {
             SettingsView(settings: settings)
