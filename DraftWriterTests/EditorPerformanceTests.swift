@@ -34,6 +34,19 @@ import Testing
         #expect(ms < 50, "one keystroke with highlighting took \(ms) ms")
     }
 
+    /// Arrow keys and clicks recolour without editing: only the ranges coloured last time are cleared.
+    @Test func movingTheCaretInLongDocumentWithFocusAndHighlighting() {
+        let h = EditorHarness(initial: Self.longText)
+        h.coordinator.parent.focusMode = .sentence
+        h.coordinator.parent.highlightClasses = Set(LexicalClass.allCases)
+        let middle = (Self.longText as NSString).length / 2
+        h.textView.setSelectedRange(NSRange(location: middle, length: 0))   // warms the paragraph cache
+        let ms = milliseconds {
+            for offset in 1...10 { h.textView.setSelectedRange(NSRange(location: middle + offset * 40, length: 0)) }
+        } / 10
+        #expect(ms < 20, "one caret move took \(ms) ms")
+    }
+
     @Test func typingInLongDocument() {
         let h = EditorHarness(initial: Self.longText)
         h.textView.setSelectedRange(NSRange(location: (Self.longText as NSString).length / 2, length: 0))

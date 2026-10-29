@@ -70,6 +70,11 @@ struct EditorView: NSViewRepresentable {
         /// Code that part-of-speech highlighting leaves alone.
         private var codeRanges: [NSRange] { codeBlocks + inlineCode }
         private(set) var appliedHighlightClasses: Set<LexicalClass> = []
+        /// Ranges the last colour pass set, so a caret move clears only those instead of the whole document.
+        /// After an edit the next pass clears everything once: TextKit 2 doesn't move rendering attributes
+        /// predictably with edited text.
+        private var colouredRanges: [NSRange] = []
+        private var clearsWholeDocument = true
         private let highlighter = SyntaxHighlighter()
         private static var requestedLanguages: Set<NLLanguage> = []
         static let modelRetryDelay: Duration = .seconds(60)
@@ -81,6 +86,7 @@ struct EditorView: NSViewRepresentable {
         func textView(_ textView: NSTextView, shouldChangeTextIn range: NSRange, replacementString: String?) -> Bool {
             lastEditedRange = NSRange(location: range.location, length: (replacementString as NSString?)?.length ?? 0)
             shiftCodeBlocks(replacing: range, with: lastEditedRange!.length)
+            clearsWholeDocument = true
             return true
         }
 
@@ -93,12 +99,14 @@ struct EditorView: NSViewRepresentable {
             textView.string = text
             textView.undoManager?.removeAllActions()
             lineIndex = nil
+            clearsWholeDocument = true
             textView.setSelectedRange(NSRange(location: caret, length: 0))
         }
 
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
             lineIndex = nil
+            clearsWholeDocument = true   // a colour pass during the edit may have used locations from before it
             parent.text = textView.string
             guard !textView.hasMarkedText() else { return }   // never restyle mid-composition
             if let edited = lastEditedRange { restyleParagraphs(around: edited) }
@@ -170,7 +178,7 @@ struct EditorView: NSViewRepresentable {
             appliedHighlightClasses = parent.highlightClasses
             let text = textView.string
             let length = (text as NSString).length
-            tlm.removeRenderingAttribute(.foregroundColor, for: tlm.documentRange)
+            clearRenderingColors(tlm)
 
             let bright = FocusController.brightRange(in: text, selection: textView.selectedRange(), mode: parent.focusMode)
             if let bright {
@@ -192,7 +200,20 @@ struct EditorView: NSViewRepresentable {
         private func setColor(_ color: NSColor, _ range: NSRange, _ tlm: NSTextLayoutManager) {
             if let textRange = Self.textRange(range, in: tlm) {
                 tlm.addRenderingAttribute(.foregroundColor, value: color, for: textRange)
+                colouredRanges.append(range)
             }
+        }
+
+        private func clearRenderingColors(_ tlm: NSTextLayoutManager) {
+            if clearsWholeDocument {
+                tlm.removeRenderingAttribute(.foregroundColor, for: tlm.documentRange)
+                clearsWholeDocument = false
+            } else {
+                for range in colouredRanges where range.length > 0 {
+                    if let textRange = Self.textRange(range, in: tlm) { tlm.removeRenderingAttribute(.foregroundColor, for: textRange) }
+                }
+            }
+            colouredRanges.removeAll(keepingCapacity: true)
         }
 
         /// The visible text plus one screen above and below, from TextKit 2's layout fragments.

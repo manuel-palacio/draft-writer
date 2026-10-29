@@ -57,6 +57,8 @@ public final class SyntaxHighlighter {
         let ns = text as NSString
         let clamped = NSIntersectionRange(range, NSRange(location: 0, length: ns.length))
         let paragraphs = ns.paragraphRange(for: clamped)
+        // A long document has thousands of code spans; test each word only against those nearby.
+        let excluding = excluding.filter { NSIntersectionRange($0, paragraphs).length > 0 }
         var result: [Highlight] = []
         ns.enumerateSubstrings(in: paragraphs, options: .byParagraphs) { paragraph, paragraphRange, _, _ in
             guard let paragraph, !paragraph.isEmpty else { return }

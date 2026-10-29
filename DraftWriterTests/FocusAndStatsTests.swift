@@ -38,6 +38,33 @@ import Testing
         #expect(renderingColor(h, at: 0) == nil)
     }
 
+    @Test func recolouringClearsOnlyPreviouslyColouredRanges() throws {
+        let h = EditorHarness(initial: "One here. Two here.")
+        h.coordinator.parent.focusMode = .sentence
+        h.textView.setSelectedRange(NSRange(location: 12, length: 0))
+        h.coordinator.applyFocus()
+        // A colour the last pass didn't set (inside the bright sentence) survives the next pass.
+        let tlm = try #require(h.textView.textLayoutManager)
+        let start = try #require(tlm.location(tlm.documentRange.location, offsetBy: 12))
+        tlm.addRenderingAttribute(.foregroundColor, value: NSColor.red,
+                                  for: try #require(NSTextRange(location: start, end: tlm.location(start, offsetBy: 2))))
+        h.coordinator.applyFocus()
+        #expect(renderingColor(h, at: 12) == NSColor.red)
+        #expect(renderingColor(h, at: 0) == Theme.dimmed)
+    }
+
+    @Test func colouredRangesFollowEdits() {
+        let h = EditorHarness(initial: "One here. Two here.")
+        h.coordinator.parent.focusMode = .sentence
+        h.textView.setSelectedRange(NSRange(location: 12, length: 0))
+        h.coordinator.applyFocus()
+        h.textView.setSelectedRange(NSRange(location: 0, length: 0))
+        h.type("Zero. ")
+        h.coordinator.parent.focusMode = .off
+        h.coordinator.applyFocus()
+        for location in [0, 6, 10, 20] { #expect(renderingColor(h, at: location) == nil, "\(location)") }
+    }
+
     @Test func typewriterCentresWithHalfHeightInsets() {
         let h = EditorHarness(initial: String(repeating: "line\n", count: 200))
         h.textView.typewriter = true
