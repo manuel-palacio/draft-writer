@@ -120,6 +120,44 @@ import WebKit
         #expect(preview.pageLoads == 1)
     }
 
+    func templateCSS(_ css: String) throws -> String? {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "template-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try css.write(to: folder.appending(path: "a.css"), atomically: true, encoding: .utf8)
+        let templates = TemplateFolder(defaults: UserDefaults(suiteName: "PreviewViewTests-\(UUID().uuidString)")!)
+        try templates.choose(folder)
+        return templates.css
+    }
+
+    func bodyColor(_ preview: PreviewView.Coordinator) async throws -> String? {
+        try await preview.webView.evaluateJavaScript("getComputedStyle(document.body).color") as? String
+    }
+
+    @Test func templateStylesheetReplacesBuiltIn() async throws {
+        let preview = PreviewView.Coordinator()
+        preview.templateCSS = try templateCSS("body { color: rgb(1, 2, 3) }")
+        preview.show(markdown: "Hello")
+        await preview.waitUntilLoaded()
+        #expect(try await bodyColor(preview) == "rgb(1, 2, 3)")
+        let family = try await preview.webView.evaluateJavaScript("getComputedStyle(document.body).fontFamily") as? String
+        #expect(family?.contains("iA Writer") == false)   // none of the built-in stylesheet is left
+    }
+
+    @Test func changingTemplateRestylesTheOpenPreview() async throws {
+        let preview = PreviewView.Coordinator()
+        preview.lastMarkdown = "# Kept"
+        preview.show(markdown: "# Kept")
+        await preview.waitUntilLoaded()
+        #expect(try await bodyColor(preview) != "rgb(1, 2, 3)")
+        preview.templateCSS = try templateCSS("body { color: rgb(1, 2, 3) }")
+        await preview.waitUntilLoaded()
+        #expect(try await bodyColor(preview) == "rgb(1, 2, 3)")
+        #expect(try await text(preview, "#content h1") == "Kept")
+        preview.templateCSS = nil   // back to built-in
+        await preview.waitUntilLoaded()
+        #expect(try await bodyColor(preview) != "rgb(1, 2, 3)")
+    }
+
     @Test func scrollToLineDefined() async throws {
         let preview = PreviewView.Coordinator()
         preview.show(markdown: "# A\n\ntext")

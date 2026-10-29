@@ -25,6 +25,7 @@ struct SettingsView: View {
                 Text("Light").tag(Appearance.light)
                 Text("Dark").tag(Appearance.dark)
             }
+            TemplateFolderPicker(templates: .shared)
         }
         .formStyle(.grouped)
         .frame(width: 420)

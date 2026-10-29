@@ -10,6 +10,7 @@ struct DocumentWindow: View {
     let fileURL: URL?
     @Bindable var settings: EditorSettings
     var library: LibraryStore = .shared
+    var templates: TemplateFolder = .shared
     @State private var selection = NSRange(location: 0, length: 0)
     @State private var stats = TextStats(words: 0, characters: 0, readingMinutes: 0)
     @State private var isTyping = false
@@ -35,7 +36,7 @@ struct DocumentWindow: View {
                         .frame(minWidth: 360)
                     if settings.showPreview {
                         PreviewView(markdown: document.text, documentFolder: fileURL?.deletingLastPathComponent(),
-                                    topLine: topLine, font: settings.font)
+                                    topLine: topLine, font: settings.font, templateCSS: templates.css)
                             .frame(minWidth: 320)
                     }
                 }
@@ -52,7 +53,7 @@ struct DocumentWindow: View {
         .onChange(of: document.text) { isTyping = true }
         .focusedSceneValue(\.exportSource, ExportSource(markdown: document.text, title: title,
                                                          documentFolder: fileURL?.deletingLastPathComponent(),
-                                                         font: settings.font))
+                                                         font: settings.font, templateCSS: templates.css))
         .task(id: StatsInput(text: document.text, selection: selection)) { await updateStats() }
         .navigationPalettes(text: document.text, library: library, jump: $jump)
     }

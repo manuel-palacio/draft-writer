@@ -9,6 +9,8 @@ struct PreviewView: NSViewRepresentable {
     let documentFolder: URL?
     let topLine: Int
     var font: EditorFont = .duo
+    /// The template folder's stylesheet; nil uses the built-in one.
+    var templateCSS: String?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -16,6 +18,7 @@ struct PreviewView: NSViewRepresentable {
         let coordinator = context.coordinator
         coordinator.assets.documentFolder = documentFolder
         coordinator.font = font
+        coordinator.templateCSS = templateCSS
         coordinator.show(markdown: markdown)
         coordinator.lastMarkdown = markdown
         return coordinator.webView
@@ -25,6 +28,7 @@ struct PreviewView: NSViewRepresentable {
         let coordinator = context.coordinator
         coordinator.assets.documentFolder = documentFolder
         if coordinator.font != font { coordinator.font = font }
+        if coordinator.templateCSS != templateCSS { coordinator.templateCSS = templateCSS }
         if coordinator.lastMarkdown != markdown {
             coordinator.lastMarkdown = markdown
             coordinator.scheduleUpdate(markdown: markdown)
@@ -63,6 +67,10 @@ struct PreviewView: NSViewRepresentable {
         var font: EditorFont = .duo {
             didSet { if loaded { applyFont() } }
         }
+        /// Template stylesheet (nil: built-in). The stylesheet is part of the page, so changing it reloads the page.
+        var templateCSS: String? {
+            didSet { if pageRequested && templateCSS != oldValue { reloadPage() } }
+        }
 
         override init() {
             let configuration = WKWebViewConfiguration()
@@ -82,13 +90,19 @@ struct PreviewView: NSViewRepresentable {
                 pageRequested = true
                 loaded = false
                 pageLoads += 1
-                let page = PreviewRenderer.page(for: markdown, title: "Preview", css: PreviewAssets.previewCSS(font: font),
+                let page = PreviewRenderer.page(for: markdown, title: "Preview", css: templateCSS ?? PreviewAssets.previewCSS(font: font),
                                                 folder: documentFolder)
                 webView.loadHTMLString(page, baseURL: PreviewAssets.baseURL)
                 return
             }
             let body = PreviewRenderer.body(for: markdown, folder: documentFolder)
             if loaded { replaceContent(body) } else { pendingBody = body }
+        }
+
+        private func reloadPage() {
+            pageRequested = false
+            pendingBody = nil
+            show(markdown: lastMarkdown)
         }
 
         /// Debounced `show`: renders 300 ms after the last call; each call replaces the pending one.

@@ -12,6 +12,7 @@ struct DraftWriterApp: App {
         }
         #endif
         LibraryStore.shared.restore()
+        TemplateFolder.shared.restore()
         #if DEBUG
         // UI tests point the library at a folder in the app's container: `-DraftLibraryPath <path>`.
         if let path = UserDefaults.standard.string(forKey: "DraftLibraryPath") {
