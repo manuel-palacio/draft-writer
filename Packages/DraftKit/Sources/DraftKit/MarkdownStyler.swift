@@ -3,7 +3,7 @@ import Markdown
 
 public enum MarkdownStyle: Hashable, Sendable {
     case heading(level: Int)
-    case emphasis, strong, inlineCode, codeBlock
+    case emphasis, strong, strikethrough, inlineCode, codeBlock
     case link, linkDestination
     case blockQuote, listMarker, syntaxMarker
 }
@@ -66,6 +66,11 @@ private struct StyleWalker: MarkupWalker {
         descendInto(strong)
     }
 
+    mutating func visitStrikethrough(_ strikethrough: Strikethrough) {
+        if let r = emit(strikethrough, .strikethrough) { markEnds(r, width: leadingRun(of: "~", in: r)) }
+        descendInto(strikethrough)
+    }
+
     mutating func visitInlineCode(_ inlineCode: InlineCode) {
         emit(inlineCode, .inlineCode)
     }
@@ -75,16 +80,44 @@ private struct StyleWalker: MarkupWalker {
     }
 
     mutating func visitLink(_ link: Link) {
-        if let r = emit(link, .link) {
-            let source = ns.substring(with: r) as NSString
-            let open = source.range(of: "](")
-            if open.location != NSNotFound, source.hasSuffix(")") {
-                let start = open.location + open.length
-                let destination = NSRange(location: r.location + start, length: r.length - start - 1)
-                add(destination, .linkDestination)
-            }
+        if let r = emit(link, .link), let destination = destination(in: r) {
+            add(destination, .linkDestination)
         }
         descendInto(link)
+    }
+
+    /// Greyed like a link's markup, but not underlined: the image isn't clickable in the editor.
+    mutating func visitImage(_ image: Image) {
+        if let range = image.range, let r = converter.nsRange(range) {
+            add(NSRange(location: r.location, length: 1), .syntaxMarker)
+            if let destination = destination(in: r) { add(destination, .linkDestination) }
+        }
+        descendInto(image)
+    }
+
+    mutating func visitThematicBreak(_ thematicBreak: ThematicBreak) {
+        // swift-markdown's range runs to the start of the next line; grey only the break's own line.
+        guard let range = thematicBreak.range, let r = converter.nsRange(range) else { return }
+        var contentsEnd = 0
+        ns.getLineStart(nil, end: nil, contentsEnd: &contentsEnd, for: NSRange(location: r.location, length: 0))
+        add(NSRange(location: r.location, length: contentsEnd - r.location), .syntaxMarker)
+    }
+
+    /// Greys the delimiter row and every unescaped `|` (GFM requires pipes inside cells, even in code, to be escaped).
+    mutating func visitTable(_ table: Table) {
+        if let range = table.range, let r = converter.nsRange(range) {
+            var lineStart = r.location
+            var row = 0
+            while lineStart < NSMaxRange(r) {
+                var lineEnd = 0, next = 0
+                ns.getLineStart(nil, end: &next, contentsEnd: &lineEnd, for: NSRange(location: lineStart, length: 0))
+                let line = NSRange(location: lineStart, length: min(lineEnd, NSMaxRange(r)) - lineStart)
+                if row == 1 { add(line, .syntaxMarker) } else { markPipes(in: line) }
+                lineStart = next
+                row += 1
+            }
+        }
+        descendInto(table)
     }
 
     mutating func visitBlockQuote(_ blockQuote: BlockQuote) {
@@ -125,6 +158,24 @@ private struct StyleWalker: MarkupWalker {
 
     private mutating func add(_ range: NSRange, _ style: MarkdownStyle) {
         styles.append(StyledRange(range: range, style: style))
+    }
+
+    /// The destination inside a link or image's `[text](destination)` source, without the parentheses.
+    private func destination(in r: NSRange) -> NSRange? {
+        let source = ns.substring(with: r) as NSString
+        let open = source.range(of: "](")
+        guard open.location != NSNotFound, source.hasSuffix(")") else { return nil }
+        let start = open.location + open.length
+        return NSRange(location: r.location + start, length: r.length - start - 1)
+    }
+
+    private mutating func markPipes(in line: NSRange) {
+        let pipe = UInt16(UInt8(ascii: "|")), backslash = UInt16(UInt8(ascii: "\\"))
+        for i in line.location..<NSMaxRange(line) where ns.character(at: i) == pipe {
+            if i == line.location || ns.character(at: i - 1) != backslash {
+                add(NSRange(location: i, length: 1), .syntaxMarker)
+            }
+        }
     }
 
     private mutating func markEnds(_ r: NSRange, width: Int) {

@@ -28,6 +28,8 @@ enum AttributeApplier {
             restyleFonts(storage, r) { font(like: $0, size: $0.pointSize, bold: true, italic: isItalic($0)) }
         case .emphasis:
             restyleFonts(storage, r) { font(like: $0, size: $0.pointSize, bold: isBold($0), italic: true) }
+        case .strikethrough:
+            storage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: r)
         case .inlineCode, .codeBlock:
             storage.addAttribute(.font, value: Theme.font(.mono, size: size), range: r)
             storage.addAttribute(.backgroundColor, value: Theme.codeBackground, range: r)

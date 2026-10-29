@@ -15,6 +15,25 @@ import Testing
         #expect(h.font(at: x)?.fontName == "iAWriterMonoS-Regular")
     }
 
+    @Test func strikethroughIsStruckWithGreyedMarkers() {
+        let h = EditorHarness(initial: "a ~~gone~~ b")
+        let struck = h.textView.textStorage?.attribute(.strikethroughStyle, at: 5, effectiveRange: nil) as? Int
+        #expect(struck == NSUnderlineStyle.single.rawValue)
+        #expect(h.color(at: 2) == Theme.marker)
+        #expect(h.color(at: 8) == Theme.marker)
+        #expect(h.color(at: 5) == Theme.text)
+    }
+
+    @Test func imagesTablesAndBreaksAreGreyed() {
+        let text = "![alt](a.png)\n\n---\n\n| A |\n|---|\n"
+        let h = EditorHarness(initial: text)
+        let ns = text as NSString
+        for marker in ["!", "a.png", "---\n\n", "|---|"] {
+            #expect(h.color(at: ns.range(of: marker).location) == Theme.marker, "\(marker)")
+        }
+        #expect(h.color(at: 2) == Theme.text)   // the alt text
+    }
+
     @Test func listItemsHaveHangingIndent() throws {
         let h = EditorHarness(initial: "- a long list item that wraps")
         let style = try #require(h.textView.textStorage?.attribute(.paragraphStyle, at: 3, effectiveRange: nil) as? NSParagraphStyle)

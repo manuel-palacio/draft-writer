@@ -75,6 +75,38 @@ import Testing
         #expect(markers == [0, 6, 12])
     }
 
+    func markers(_ text: String) -> [String] {
+        pairs(text).filter { $0.1 == .syntaxMarker }.map(\.0)
+    }
+
+    @Test func strikethrough() {
+        let text = "a ~~gone~~ b"
+        #expect(contains(text, "~~gone~~", .strikethrough))
+        #expect(markers(text) == ["~~", "~~"])
+    }
+
+    @Test func image() {
+        let text = "![alt](img/a.png)"
+        #expect(contains(text, "!", .syntaxMarker))
+        #expect(contains(text, "img/a.png", .linkDestination))
+        #expect(!pairs(text).contains { $0.1 == .link })   // not underlined like a link
+    }
+
+    @Test func thematicBreaks() {
+        #expect(contains("a\n\n---\n\nb", "---", .syntaxMarker))
+        #expect(contains("a\n\n***\n\nb", "***", .syntaxMarker))
+        #expect(!pairs("a\n\n***\n\nb").contains { $0.1 == .strong })
+    }
+
+    @Test func tablePipesAndDelimiterRow() {
+        let text = "| A | B |\n|---|:-:|\n| 1 | `x\\|y` |"
+        let ns = text as NSString
+        let greyed = MarkdownStyler.styles(for: text).filter { $0.style == .syntaxMarker }.map(\.range)
+        #expect(greyed.contains(ns.range(of: "|---|:-:|")))
+        let pipes = greyed.filter { $0.length == 1 }.map { ns.substring(with: $0) }
+        #expect(pipes == Array(repeating: "|", count: 6))   // the escaped pipe in code is content
+    }
+
     @Test func nestedQuoteMarkersAreGreyed() {
         let text = "> > deep"
         let markers = MarkdownStyler.styles(for: text).filter { $0.style == .syntaxMarker }.map(\.range.location)
