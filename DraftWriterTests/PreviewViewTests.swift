@@ -16,6 +16,24 @@ import WebKit
         #expect(try await text(preview, "#content h1") == "Title")
     }
 
+    @Test func embedsContentBlocksFromTheDocumentFolder() async throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appending(path: "preview-blocks-\(UUID().uuidString)")
+        let doc = root.appending(path: "doc")
+        defer { try? fm.removeItem(at: root) }
+        try fm.createDirectory(at: doc, withIntermediateDirectories: true)
+        try "## Chapter".write(to: doc.appending(path: "chapter.md"), atomically: true, encoding: .utf8)
+        try "## Secret".write(to: root.appending(path: "secret.md"), atomically: true, encoding: .utf8)
+        let preview = PreviewView.Coordinator()
+        preview.assets.documentFolder = doc
+        preview.show(markdown: "/chapter.md")
+        await preview.waitUntilLoaded()
+        #expect(try await text(preview, "#content .content-block h2") == "Chapter")
+        preview.show(markdown: "/../secret.md\n\n/chapter.md\n\nEnd")
+        #expect(try await text(preview, "#content p") == "/../secret.md")
+        #expect(try await text(preview, "#content .content-block h2") == "Chapter")
+    }
+
     @Test func updateKeepsSamePageLoad() async throws {
         let preview = PreviewView.Coordinator()
         preview.show(markdown: "# Title")

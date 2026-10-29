@@ -36,7 +36,8 @@ enum Exporter {
     static let margin: CGFloat = 56.7   // 2 cm
 
     static func html(_ source: ExportSource) -> String {
-        PreviewRenderer.page(for: source.markdown, title: source.title, css: PreviewAssets.exportCSS(font: source.font, includesCode: hasCode(source.markdown)))
+        PreviewRenderer.page(for: source.markdown, title: source.title, css: PreviewAssets.exportCSS(font: source.font, includesCode: hasCode(source.markdown)),
+                             folder: source.documentFolder.map(DocumentFolder.init(url:)))
     }
 
     private static func hasCode(_ markdown: String) -> Bool {

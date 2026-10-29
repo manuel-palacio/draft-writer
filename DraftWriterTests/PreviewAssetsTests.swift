@@ -1,3 +1,4 @@
+import DraftKit
 import Foundation
 import Testing
 @testable import Draft_Writer
@@ -37,6 +38,12 @@ import Testing
         try fm.createSymbolicLink(at: doc.appending(path: "link"), withDestinationURL: outside)
         #expect(resolve("draft-asset://doc/link/secret.txt", folder: doc) == nil)
         #expect(resolve("draft-asset://doc/img/a.png", folder: doc) != nil)
+    }
+
+    @Test func sharesTheContentBlockFolderRule() {
+        for path in ["img/a.png", "../x.png", "a/../../x.png", ""] {
+            #expect(resolve("draft-asset://doc/\(path)", folder: folder) == DocumentFolder(url: folder).fileURL(relativePath: path))
+        }
     }
 
     @Test func noFolderResolvesNothing() {
