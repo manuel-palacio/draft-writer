@@ -1,4 +1,5 @@
 import AppKit
+import DraftKit
 import Testing
 @testable import Draft_Writer
 
@@ -26,5 +27,16 @@ import Testing
         #expect(NSApp.appearance?.name == .aqua)
         settings.appearance = .auto
         #expect(NSApp.appearance == nil)
+    }
+
+    @Test func styleChecksDefaultOnPersistAndFollowSyntaxHighlight() {
+        let store = defaults(appearance: .auto)
+        let settings = EditorSettings(defaults: store)
+        #expect(settings.styleChecks == Set(StyleCheck.allCases))
+        settings.syntaxHighlight = false
+        #expect(settings.activeStyleChecks.isEmpty)
+        settings.syntaxHighlight = true
+        settings.styleChecks.remove(.cliche)
+        #expect(EditorSettings(defaults: store).activeStyleChecks == [.filler, .redundancy])
     }
 }

@@ -12,6 +12,8 @@ struct EditorView: NSViewRepresentable {
     var focusMode: FocusMode = .off
     /// Part-of-speech classes to colour; empty turns highlighting off.
     var highlightClasses: Set<LexicalClass> = []
+    /// Style checks (fillers, clichés, redundancies) to colour; they win over part-of-speech colours.
+    var styleChecks: Set<StyleCheck> = []
     var typewriter = false
     /// Called with the 1-based source line at the top of the visible area when the editor scrolls.
     var onTopLineChange: ((Int) -> Void)? = nil
@@ -19,6 +21,8 @@ struct EditorView: NSViewRepresentable {
     var jump: EditorJump? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    var highlightsAnything: Bool { !highlightClasses.isEmpty || !styleChecks.isEmpty }
 
     func makeNSView(context: Context) -> NSScrollView {
         let (scrollView, textView) = DraftTextView.make()
@@ -45,6 +49,7 @@ struct EditorView: NSViewRepresentable {
         if textView.columnWidth != columnWidth { textView.columnWidth = columnWidth }
         if textView.typewriter != typewriter { textView.typewriter = typewriter }
         let focusChanged = coordinator.appliedFocusMode != focusMode || coordinator.appliedHighlightClasses != highlightClasses
+            || coordinator.appliedStyleChecks != styleChecks
         if textView.string != text {
             coordinator.replaceText(with: text)
             needsRestyle = true
@@ -75,6 +80,7 @@ struct EditorView: NSViewRepresentable {
         /// Code that part-of-speech highlighting leaves alone.
         private var codeRanges: [NSRange] { codeBlocks + inlineCode }
         private(set) var appliedHighlightClasses: Set<LexicalClass> = []
+        private(set) var appliedStyleChecks: Set<StyleCheck> = []
         /// Ranges the last colour pass set, so a caret move clears only those instead of the whole document.
         /// After an edit the next pass clears everything once: TextKit 2 doesn't move rendering attributes
         /// predictably with edited text.
@@ -148,12 +154,12 @@ struct EditorView: NSViewRepresentable {
         }
 
         @objc private func clipViewDidResize(_ notification: Notification) {
-            if !parent.highlightClasses.isEmpty { applyRenderingColors() }
+            if parent.highlightsAnything { applyRenderingColors() }
         }
 
         @objc private func clipViewDidScroll(_ notification: Notification) {
             reportTopLine()
-            if !parent.highlightClasses.isEmpty { applyRenderingColors() }
+            if parent.highlightsAnything { applyRenderingColors() }
         }
 
         /// Tells the preview which source line is at the top. The line index is rebuilt only after edits,
@@ -175,12 +181,14 @@ struct EditorView: NSViewRepresentable {
         func applyFocus() { applyRenderingColors() }
 
         /// Applies every colour that is display-only, as TextKit 2 rendering attributes (which override the
-        /// stored colour without touching the text storage): focus dimming, then part-of-speech highlights.
+        /// stored colour without touching the text storage): focus dimming, then part-of-speech highlights,
+        /// then style checks, which are applied last so they win where both cover a word.
         /// Highlighted words outside the focused range keep their hue at reduced opacity.
         func applyRenderingColors() {
             guard let textView, let tlm = textView.textLayoutManager else { return }
             appliedFocusMode = parent.focusMode
             appliedHighlightClasses = parent.highlightClasses
+            appliedStyleChecks = parent.styleChecks
             let text = textView.string
             let length = (text as NSString).length
             clearRenderingColors(tlm)
@@ -192,12 +200,20 @@ struct EditorView: NSViewRepresentable {
                 for range in dimmed where range.length > 0 { setColor(Theme.dimmed, range, tlm) }
             }
 
-            guard !parent.highlightClasses.isEmpty else { return }
+            guard parent.highlightsAnything else { return }
             let visible = visibleRangeWithMargin()
-            for highlight in highlighter.highlights(in: text, range: visible, excluding: codeRanges)
-            where parent.highlightClasses.contains(highlight.lexicalClass) {
-                let isDimmed = bright.map { NSIntersectionRange($0, highlight.range).length == 0 } ?? false
-                setColor(Theme.highlight(highlight.lexicalClass, dimmed: isDimmed), highlight.range, tlm)
+            func isDimmed(_ range: NSRange) -> Bool { bright.map { NSIntersectionRange($0, range).length == 0 } ?? false }
+            if !parent.highlightClasses.isEmpty {
+                for highlight in highlighter.highlights(in: text, range: visible, excluding: codeRanges)
+                where parent.highlightClasses.contains(highlight.lexicalClass) {
+                    setColor(Theme.highlight(highlight.lexicalClass, dimmed: isDimmed(highlight.range)), highlight.range, tlm)
+                }
+            }
+            if !parent.styleChecks.isEmpty {
+                for match in highlighter.styleMatches(in: text, range: visible, excluding: codeRanges)
+                where parent.styleChecks.contains(match.check) {
+                    setColor(Theme.highlight(match.check, dimmed: isDimmed(match.range)), match.range, tlm)
+                }
             }
             requestMissingLanguageModels()
         }

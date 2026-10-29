@@ -31,6 +31,7 @@ struct DocumentWindow: View {
                     EditorView(text: $document.text, selection: $selection,
                                font: settings.editorFont, columnWidth: settings.columnWidth,
                                focusMode: settings.focusMode, highlightClasses: settings.activeHighlightClasses,
+                               styleChecks: settings.activeStyleChecks,
                                typewriter: settings.typewriter,
                                onTopLineChange: settings.showPreview ? { topLine = $0 } : nil, jump: jump)
                         .frame(minWidth: 360)

@@ -50,9 +50,12 @@ final class EditorSettings {
     var showLibrary: Bool { didSet { store(showLibrary, "showLibrary") } }
     var syntaxHighlight: Bool { didSet { store(syntaxHighlight, "syntaxHighlight") } }
     var highlightClasses: Set<LexicalClass> { didSet { store(highlightClasses.map(\.rawValue).sorted(), "highlightClasses") } }
+    var styleChecks: Set<StyleCheck> { didSet { store(styleChecks.map(\.rawValue).sorted(), "styleChecks") } }
 
     /// The classes the editor should colour right now (empty when highlighting is off).
     var activeHighlightClasses: Set<LexicalClass> { syntaxHighlight ? highlightClasses : [] }
+    /// The style checks the editor should colour right now; Syntax Highlight switches them too.
+    var activeStyleChecks: Set<StyleCheck> { syntaxHighlight ? styleChecks : [] }
 
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -70,6 +73,8 @@ final class EditorSettings {
         syntaxHighlight = defaults.bool(forKey: "syntaxHighlight")
         highlightClasses = (defaults.stringArray(forKey: "highlightClasses")).map { Set($0.compactMap(LexicalClass.init)) }
             ?? Set(LexicalClass.allCases)
+        styleChecks = (defaults.stringArray(forKey: "styleChecks")).map { Set($0.compactMap(StyleCheck.init)) }
+            ?? Set(StyleCheck.allCases)
         applyAppearance()   // `didSet` doesn't run in `init`, and windows must open in the stored appearance
     }
 

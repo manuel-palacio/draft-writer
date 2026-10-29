@@ -23,6 +23,14 @@ struct EditorCommands: Commands {
                             if on { settings.highlightClasses.insert(lexicalClass) } else { settings.highlightClasses.remove(lexicalClass) }
                         }))
                 }
+                Divider()
+                ForEach(StyleCheck.allCases, id: \.self) { check in
+                    Toggle(check.title, isOn: Binding(
+                        get: { settings.styleChecks.contains(check) },
+                        set: { on in
+                            if on { settings.styleChecks.insert(check) } else { settings.styleChecks.remove(check) }
+                        }))
+                }
             }
             .disabled(!settings.syntaxHighlight)
             Divider()
@@ -48,6 +56,16 @@ extension FocusMode {
         case .off: "Off"
         case .sentence: "Sentence"
         case .paragraph: "Paragraph"
+        }
+    }
+}
+
+extension StyleCheck {
+    var title: String {
+        switch self {
+        case .filler: "Fillers"
+        case .cliche: "Clichés"
+        case .redundancy: "Redundancies"
         }
     }
 }
