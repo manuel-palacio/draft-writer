@@ -30,6 +30,21 @@ import Testing
         #expect(withCode.contains("@font-face { font-family: \"iA Writer Mono\""))
     }
 
+    @Test func htmlEmbedsContentBlocksFromTheDocumentFolder() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appending(path: "export-blocks-\(UUID().uuidString)")
+        let doc = root.appending(path: "doc")
+        defer { try? fm.removeItem(at: root) }
+        try fm.createDirectory(at: doc, withIntermediateDirectories: true)
+        try "Embedded *chapter*".write(to: doc.appending(path: "chapter.md"), atomically: true, encoding: .utf8)
+        try "Secret".write(to: root.appending(path: "secret.md"), atomically: true, encoding: .utf8)
+        try "png".write(to: doc.appending(path: "fig.png"), atomically: true, encoding: .utf8)
+        let html = Exporter.html(ExportSource(markdown: "/chapter.md\n\n/../secret.md\n\n/fig.png", title: "x", documentFolder: doc))
+        #expect(html.contains("Embedded <em>chapter</em>"))
+        #expect(!html.contains("<p>Secret</p>") && html.contains(">/../secret.md</p>"))
+        #expect(html.contains(#"<img src="fig.png""#))
+    }
+
     @Test func pdfIsPaginatedA4() async throws {
         let url = tempURL("pdf")
         defer { try? FileManager.default.removeItem(at: url) }

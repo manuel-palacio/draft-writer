@@ -82,11 +82,12 @@ struct PreviewView: NSViewRepresentable {
                 pageRequested = true
                 loaded = false
                 pageLoads += 1
-                let page = PreviewRenderer.page(for: markdown, title: "Preview", css: PreviewAssets.previewCSS(font: font))
+                let page = PreviewRenderer.page(for: markdown, title: "Preview", css: PreviewAssets.previewCSS(font: font),
+                                                folder: documentFolder)
                 webView.loadHTMLString(page, baseURL: PreviewAssets.baseURL)
                 return
             }
-            let body = PreviewRenderer.body(for: markdown)
+            let body = PreviewRenderer.body(for: markdown, folder: documentFolder)
             if loaded { replaceContent(body) } else { pendingBody = body }
         }
 
@@ -99,6 +100,9 @@ struct PreviewView: NSViewRepresentable {
                 self?.show(markdown: markdown)
             }
         }
+
+        /// Where `/path` content blocks are read from: the same folder the asset handler serves.
+        private var documentFolder: DocumentFolder? { assets.documentFolder.map(DocumentFolder.init(url:)) }
 
         private func applyFont() {
             webView.evaluateJavaScript(

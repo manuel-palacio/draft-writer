@@ -1,3 +1,4 @@
+import DraftKit
 import Foundation
 
 /// The preview/export stylesheet and the `draft-asset://` URL space the preview loads from:
@@ -63,13 +64,8 @@ enum PreviewAssets {
         let path = url.path(percentEncoded: false)
         switch url.host() {
         case "doc":
-            // Resolve symlinks on both sides, so a link inside the folder can't point the preview outside it.
-            guard let folder = documentFolder?.standardizedFileURL.resolvingSymlinksInPath(),
-                  path.hasPrefix("/"), !path.hasPrefix("//") else {
-                return nil
-            }
-            let candidate = folder.appending(path: String(path.dropFirst())).standardizedFileURL.resolvingSymlinksInPath()
-            return candidate.path.hasPrefix(folder.path + "/") ? candidate : nil
+            guard let documentFolder, path.hasPrefix("/"), !path.hasPrefix("//") else { return nil }
+            return DocumentFolder(url: documentFolder).fileURL(relativePath: String(path.dropFirst()))
         case "app":
             let parts = path.split(separator: "/", omittingEmptySubsequences: false)
             guard parts.count == 3, parts[0].isEmpty, parts[1] == "fonts", !parts[2].isEmpty, parts[2] != ".." else {

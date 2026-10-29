@@ -8,7 +8,14 @@ public enum PreviewRenderer {
     private static let extensionNames = ["table", "strikethrough", "autolink", "tasklist"]
     private static let options = CMARK_OPT_SOURCEPOS
 
-    public static func body(for markdown: String) -> String {
+    /// With a `folder`, `/path` content blocks embed files from it (see `ContentBlocks`).
+    public static func body(for markdown: String, folder: DocumentFolder? = nil) -> String {
+        let html = render(markdown)
+        guard let folder else { return html }
+        return ContentBlocks.expand(html, in: folder)
+    }
+
+    static func render(_ markdown: String) -> String {
         cmark_gfm_core_extensions_ensure_registered()
         guard let parser = cmark_parser_new(options) else { return "" }
         defer { cmark_parser_free(parser) }
@@ -29,18 +36,18 @@ public enum PreviewRenderer {
         return String(cString: html)
     }
 
-    public static func page(for markdown: String, title: String, css: String) -> String {
+    public static func page(for markdown: String, title: String, css: String, folder: DocumentFolder? = nil) -> String {
         """
         <!doctype html>
         <html><head><meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>\(escape(title))</title>
         <style>\(css)</style>
-        </head><body><article id="content">\(body(for: markdown))</article></body></html>
+        </head><body><article id="content">\(body(for: markdown, folder: folder))</article></body></html>
         """
     }
 
-    private static func escape(_ text: String) -> String {
+    static func escape(_ text: String) -> String {
         text.replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
