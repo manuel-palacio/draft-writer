@@ -64,12 +64,18 @@ enum AttributeApplier {
         }
     }
 
-    private static func isBold(_ font: NSFont) -> Bool { font.fontName.contains("Bold") }
-    private static func isItalic(_ font: NSFont) -> Bool { font.fontName.contains("Italic") }
+    private static func isBold(_ font: NSFont) -> Bool { font.fontDescriptor.symbolicTraits.contains(.bold) }
+    private static func isItalic(_ font: NSFont) -> Bool { font.fontDescriptor.symbolicTraits.contains(.italic) }
 
-    /// Same iA family as `base`, with the requested face.
+    /// Same family as `base`, with the requested face: the bundled iA face, or for any other font (such as
+    /// the system fallback when the iA fonts don't load) `base` with its bold and italic traits replaced.
     private static func font(like base: NSFont, size: CGFloat, bold: Bool, italic: Bool) -> NSFont {
-        let family = EditorFont.allCases.first { base.fontName.hasPrefix(Theme.font($0, size: 1).fontName.components(separatedBy: "-")[0]) } ?? .duo
-        return Theme.font(family, size: size, bold: bold, italic: italic)
+        if let family = EditorFont.allCases.first(where: { base.fontName.hasPrefix($0.postScriptPrefix + "-") }) {
+            return Theme.font(family, size: size, bold: bold, italic: italic)
+        }
+        var traits = base.fontDescriptor.symbolicTraits.subtracting([.bold, .italic])
+        if bold { traits.insert(.bold) }
+        if italic { traits.insert(.italic) }
+        return NSFont(descriptor: base.fontDescriptor.withSymbolicTraits(traits), size: size) ?? base
     }
 }
