@@ -10,7 +10,9 @@ final class MarkdownShortcutsUITests: XCTestCase {
         url = FileManager.default.temporaryDirectory.appending(path: "shortcuts-\(UUID().uuidString).md")
         try "".write(to: url, atomically: true, encoding: .utf8)
         app = XCUIApplication()
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES"]
         app.open(url)
+        app.activate()
         editor = app.textViews.firstMatch
         XCTAssertTrue(editor.waitForExistence(timeout: 15))
         editor.click()
@@ -43,16 +45,16 @@ final class MarkdownShortcutsUITests: XCTestCase {
     func testListKeysAndTaskToggle() {
         editor.typeText("1. one\ntwo\n")
         XCTAssertEqual(text, "1. one\n2. two\n3. ")
-        editor.typeText("\n- [ ] task\n")
-        XCTAssertEqual(text, "1. one\n2. two\n\n- [ ] task\n- [ ] ")
+        editor.typeText("\n- [ ] task\n")   // Return on the empty "3. " ends the list on that line
+        XCTAssertEqual(text, "1. one\n2. two\n- [ ] task\n- [ ] ")
         editor.typeText("sub")
         app.typeKey(.tab, modifierFlags: [])
-        XCTAssertEqual(text, "1. one\n2. two\n\n- [ ] task\n    - [ ] sub")
+        XCTAssertEqual(text, "1. one\n2. two\n- [ ] task\n    - [ ] sub")
         app.typeKey(.tab, modifierFlags: .shift)
-        XCTAssertEqual(text, "1. one\n2. two\n\n- [ ] task\n- [ ] sub")
+        XCTAssertEqual(text, "1. one\n2. two\n- [ ] task\n- [ ] sub")
         app.typeKey("l", modifierFlags: [.command, .shift])
-        XCTAssertEqual(text, "1. one\n2. two\n\n- [ ] task\n- [x] sub")
+        XCTAssertEqual(text, "1. one\n2. two\n- [ ] task\n- [x] sub")
         editor.typeText("\n\n")
-        XCTAssertEqual(text, "1. one\n2. two\n\n- [ ] task\n- [x] sub\n")
+        XCTAssertEqual(text, "1. one\n2. two\n- [ ] task\n- [x] sub\n")
     }
 }

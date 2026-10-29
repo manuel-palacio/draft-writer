@@ -195,8 +195,18 @@ final class LibraryStore {
     }
 
     #if DEBUG
-    /// UI tests: browse `folder` for this launch without replacing the saved library.
-    func activateForTesting(_ folder: URL) { activate(folder) }
+    /// UI tests: writes `notes` (relative path → text) to a fresh folder in the app's own temporary directory and
+    /// browses it for this launch, without replacing the saved library. The test runner can't write into the
+    /// sandboxed app's container itself.
+    func activateFixtureForTesting(_ notes: [String: String]) throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "ui-library-\(UUID().uuidString)", directoryHint: .isDirectory)
+        for (path, text) in notes {
+            let url = folder.appending(path: path)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try text.write(to: url, atomically: true, encoding: .utf8)
+        }
+        activate(folder)
+    }
     #endif
 
     private func activate(_ url: URL) {

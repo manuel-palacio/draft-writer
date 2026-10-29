@@ -8,7 +8,10 @@ final class DraftWriterUITests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
 
         let app = XCUIApplication()
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES"]
         app.open(url)
+        app.activate()
+        addTeardownBlock { app.terminate() }
         let editor = app.textViews.firstMatch
         XCTAssertTrue(editor.waitForExistence(timeout: 15))
         editor.click()

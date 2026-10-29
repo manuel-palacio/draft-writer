@@ -8,17 +8,22 @@ final class RevertUndoUITests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
 
         let app = XCUIApplication()
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES"]
         app.open(url)
+        app.activate()
+        addTeardownBlock { app.terminate() }
         let editor = app.textViews.firstMatch
         XCTAssertTrue(editor.waitForExistence(timeout: 15))
         editor.click()
         app.typeKey(.downArrow, modifierFlags: .command)
         editor.typeText(" and a long unsaved tail that undo would refer to")
 
-        let fileMenu = app.menuBars.menuBarItems["File"]
-        fileMenu.click()
-        fileMenu.menuItems["Revert To"].hover()
-        fileMenu.menuItems["Last Saved Version"].click()
+        app.menuBars.menuBarItems["File"].click()
+        app.menuItems["Revert To"].hover()
+        // Titled "Last Opened — <time>" or "Last Saved Version", depending on the document's history.
+        let lastSaved = app.menuItems["revertDocumentToSaved:"]
+        XCTAssertTrue(lastSaved.waitForExistence(timeout: 5))
+        lastSaved.click()
         let confirm = app.sheets.buttons["Revert"]
         if confirm.waitForExistence(timeout: 2) { confirm.click() }
         let reverted = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Saved text"), object: editor)

@@ -14,9 +14,10 @@ struct DraftWriterApp: App {
         LibraryStore.shared.restore()
         TemplateFolder.shared.restore()
         #if DEBUG
-        // UI tests point the library at a folder in the app's container: `-DraftLibraryPath <path>`.
-        if let path = UserDefaults.standard.string(forKey: "DraftLibraryPath") {
-            LibraryStore.shared.activateForTesting(URL(filePath: path, directoryHint: .isDirectory))
+        // UI tests pass their library as JSON in the environment: `DRAFT_LIBRARY_FIXTURE={"Alpha.md": "text"}`.
+        if let json = ProcessInfo.processInfo.environment["DRAFT_LIBRARY_FIXTURE"],
+           let notes = try? JSONDecoder().decode([String: String].self, from: Data(json.utf8)) {
+            try? LibraryStore.shared.activateFixtureForTesting(notes)
         }
         #endif
     }

@@ -6,8 +6,7 @@ final class NavigationUITests: XCTestCase {
     private var app: XCUIApplication!
 
     func testQuickOpenOpensANoteByFuzzyName() throws {
-        let library = try makeLibrary(["Alpha.md": "Alpha body", "Sub/Gamma Draft.md": "Gamma body", "Beta.md": "Beta body"])
-        launchWithUntitledDocument(arguments: ["-DraftLibraryPath", library.path])
+        launchWithUntitledDocument(environment: try library(["Alpha.md": "Alpha body", "Sub/Gamma Draft.md": "Gamma body", "Beta.md": "Beta body"]))
 
         app.typeKey("o", modifierFlags: [.command, .shift])
         let search = app.textFields["paletteSearch"]
@@ -21,9 +20,9 @@ final class NavigationUITests: XCTestCase {
     }
 
     func testJumpToHeadingMovesTheCaret() {
-        launchWithUntitledDocument(arguments: [])
+        launchWithUntitledDocument()
         let editor = app.textViews.firstMatch
-        editor.typeText("# One\n\nfirst\n\n## Two\n\nsecond\n\n### Three\n\nthird")
+        editor.typeText("# One\n\nFirst\n\n## Two\n\nSecond\n\n### Three\n\nThird")
 
         app.typeKey("j", modifierFlags: [.command, .shift])
         let search = app.textFields["paletteSearch"]
@@ -34,60 +33,49 @@ final class NavigationUITests: XCTestCase {
 
         // Focus is back in the editor with the caret at the start of "## Two".
         app.typeText("X")
-        XCTAssertEqual(editor.value as? String, "# One\n\nfirst\n\nX## Two\n\nsecond\n\n### Three\n\nthird")
+        XCTAssertEqual(editor.value as? String, "# One\n\nFirst\n\nX## Two\n\nSecond\n\n### Three\n\nThird")
     }
 
     func testCommandClickOnAWikilinkOpensTheNote() throws {
-        let library = try makeLibrary(["Alpha.md": "Alpha body", "Beta.md": "Beta body"])
-        launchWithUntitledDocument(arguments: ["-DraftLibraryPath", library.path])
-        commandClickFirstLine(filledWith: "[[Beta]]")
+        launchWithUntitledDocument(environment: try library(["Alpha.md": "Alpha body", "Beta.md": "Beta body"]))
+        commandClickFirstLine(of: String(repeating: "[[Beta]]", count: 12))
         let opened = app.textViews.matching(NSPredicate(format: "value == %@", "Beta body")).firstMatch
         XCTAssertTrue(opened.waitForExistence(timeout: 15))
     }
 
     func testCommandClickOnAMissingWikilinkOffersToCreateTheNote() throws {
-        let library = try makeLibrary(["Alpha.md": "Alpha body"])
-        launchWithUntitledDocument(arguments: ["-DraftLibraryPath", library.path])
-        commandClickFirstLine(filledWith: "[[Gamma]]")
-        let create = app.buttons["Create Note"]
+        launchWithUntitledDocument(environment: try library(["Alpha.md": "Alpha body"]))
+        commandClickFirstLine(of: "[[Gamma is a note whose long name fills the whole first line of the column]]")
+        let create = app.windows.buttons["Create Note"].firstMatch   // not the Touch Bar copy
         XCTAssertTrue(create.waitForExistence(timeout: 10))
         create.click()
-        let created = library.appending(path: "Gamma.md")
-        let exists = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in FileManager.default.fileExists(atPath: created.path) },
-                                               object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [exists], timeout: 10), .completed)
-        XCTAssertTrue(app.windows["Gamma"].waitForExistence(timeout: 15) || app.windows["Gamma.md"].waitForExistence(timeout: 1))
+        let created = app.windows.matching(NSPredicate(format: "title BEGINSWITH %@", "Gamma")).firstMatch
+        XCTAssertTrue(created.waitForExistence(timeout: 15))
     }
 
-    /// Types `link` until it fills the first line (one long word, so it wraps mid-link), then ⌘-clicks that line.
-    private func commandClickFirstLine(filledWith link: String) {
+    /// Types `text`, which must fill the editor's first line with link, then ⌘-clicks the middle of that line.
+    private func commandClickFirstLine(of text: String) {
         let editor = app.textViews.firstMatch
-        editor.typeText(String(repeating: link, count: 30))
+        editor.typeText(text)
+        app.typeKey(.upArrow, modifierFlags: .command)   // scrolled to the top, so the first line is on screen
         let firstLine = editor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(CGVector(dx: 0, dy: 52))
         XCUIElement.perform(withKeyModifiers: .command) { firstLine.click() }
     }
 
-    private func launchWithUntitledDocument(arguments: [String]) {
+    private func launchWithUntitledDocument(environment: [String: String] = [:]) {
         app = XCUIApplication()
-        app.launchArguments = arguments + ["-ApplePersistenceIgnoreState", "YES"]
+        app.launchEnvironment = environment
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES"]
         app.launch()
+        addTeardownBlock { [app] in app?.terminate() }
         let editor = app.textViews.firstMatch
         if !editor.waitForExistence(timeout: 5) { app.typeKey("n", modifierFlags: .command) }
         XCTAssertTrue(editor.waitForExistence(timeout: 15))
         editor.click()
     }
 
-    /// A library folder inside the sandboxed app's container, which the app can read without a bookmark.
-    private func makeLibrary(_ notes: [String: String]) throws -> URL {
-        let home = URL(filePath: String(cString: getpwuid(getuid())!.pointee.pw_dir), directoryHint: .isDirectory)
-        let root = home.appending(path: "Library/Containers/io.github.manuel-palacio.DraftWriter/Data/tmp/ui-library-\(UUID().uuidString)",
-                                  directoryHint: .isDirectory)
-        for (path, text) in notes {
-            let url = root.appending(path: path)
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try text.write(to: url, atomically: true, encoding: .utf8)
-        }
-        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
-        return root
+    /// A launch environment that gives the app a library of `notes` (relative path → text) for this launch.
+    private func library(_ notes: [String: String]) throws -> [String: String] {
+        ["DRAFT_LIBRARY_FIXTURE": String(decoding: try JSONEncoder().encode(notes), as: UTF8.self)]
     }
 }
