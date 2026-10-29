@@ -36,6 +36,8 @@ targets:
       path: DraftWriter/Info.plist
       properties:
         CFBundleDisplayName: Draft Writer
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.productivity
         ATSApplicationFontsPath: Fonts
         CFBundleDocumentTypes:

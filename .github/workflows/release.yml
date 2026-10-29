@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Build
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          xcodegen generate -q
+          xcodebuild -project DraftWriter.xcodeproj -scheme DraftWriter -configuration Release \
+            -derivedDataPath .build/release MARKETING_VERSION="${VERSION#v}" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" build
+
+      - name: Zip
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          ditto -c -k --keepParent ".build/release/Build/Products/Release/Draft Writer.app" \
+            "Draft-Writer-${VERSION#v}.zip"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" Draft-Writer-*.zip --title "Draft Writer $GITHUB_REF_NAME" --generate-notes
