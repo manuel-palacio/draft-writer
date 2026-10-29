@@ -94,9 +94,16 @@ struct EditorView: NSViewRepresentable {
         private static var requestedLanguages: Set<NLLanguage> = []
         static let modelRetryDelay: Duration = .seconds(60)
 
+        /// The editor's own undo stack. SwiftUI also registers an undo step for every change to the document
+        /// binding (one per keystroke) in the window's undo manager; ⌘Z in the editor uses this one instead, so
+        /// typing undoes in coalesced steps and a replacement from outside can clear just the editor's history.
+        private let textUndoManager = UndoManager()
+
         init(_ parent: EditorView) {
             self.parent = parent
         }
+
+        func undoManager(for view: NSTextView) -> UndoManager? { textUndoManager }
 
         func textView(_ textView: NSTextView, shouldChangeTextIn range: NSRange, replacementString: String?) -> Bool {
             lastEditedRange = NSRange(location: range.location, length: (replacementString as NSString?)?.length ?? 0)
@@ -106,13 +113,12 @@ struct EditorView: NSViewRepresentable {
         }
 
         /// External change (revert, undo through the document): replaces the text, keeps the caret in range,
-        /// and clears the undo stack, whose steps refer to ranges of the old text. (NSTextView registers its
-        /// steps with a private target, so they can't be removed selectively.)
+        /// and clears the editor's undo stack, whose steps refer to ranges of the old text.
         func replaceText(with text: String) {
             guard let textView else { return }
             let caret = min(textView.selectedRange().location, (text as NSString).length)
             textView.string = text
-            textView.undoManager?.removeAllActions()
+            textUndoManager.removeAllActions()
             lineIndex = nil
             clearsWholeDocument = true
             textView.setSelectedRange(NSRange(location: caret, length: 0))
