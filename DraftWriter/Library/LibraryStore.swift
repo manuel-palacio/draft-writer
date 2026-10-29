@@ -36,6 +36,8 @@ final class LibraryStore {
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var watcher: FolderWatcher?
+    /// The notes' searchable text, refreshed whenever the watcher reports a change.
+    @ObservationIgnored private var index: LibraryIndex?
     /// Security scopes opened this session. Never closed while the app runs: notes opened from a
     /// library folder save through its scope, even after another folder is chosen.
     @ObservationIgnored private(set) var activeScopes: [URL] = []
@@ -110,12 +112,27 @@ final class LibraryStore {
             guard !Task.isCancelled, root == self.root, sort == self.sort, self.query.isEmpty else { return }
             items = scanned
             searchResults = []
+            await refreshIndex()   // warm it, so the first query doesn't read every note
         } else {
-            let search = Task.detached { (try? Library.search(root, query: query)) ?? [] }
-            let found = await withTaskCancellationHandler { await search.value } onCancel: { search.cancel() }
+            await refreshIndex()
+            let index = index
+            let found = await Task.detached { index?.search(query) ?? [] }.value
             guard !Task.isCancelled, root == self.root, query == self.query else { return }
             searchResults = found
         }
+    }
+
+    /// Re-reads only the notes that changed on disk since the last refresh.
+    private func refreshIndex() async {
+        guard let index else { return }
+        let refreshed = await Task.detached {
+            var index = index
+            index.refresh()
+            return index
+        }.value
+        // Only the newest refresh may store its index: an older one could undo a change a newer one saw.
+        guard !Task.isCancelled, refreshed.root == root else { return }
+        self.index = refreshed
     }
 
     /// A library root must exist and must not be in the Trash (Finder "deletes" folders by moving them there,
@@ -164,6 +181,7 @@ final class LibraryStore {
         deactivate()
         if !activeScopes.contains(url), url.startAccessingSecurityScopedResource() { activeScopes.append(url) }
         root = url
+        index = LibraryIndex(root: url)
         watcher = FolderWatcher(url) { [weak self] in
             Task { @MainActor in await self?.refresh() }
         }
@@ -179,6 +197,7 @@ final class LibraryStore {
     private func deactivate() {
         watcher?.stop()
         watcher = nil
+        index = nil
         root = nil
         items = []
         searchResults = []

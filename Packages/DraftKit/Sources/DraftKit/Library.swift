@@ -51,28 +51,12 @@ public enum Library {
     }
 
     /// Notes whose name contains `query`, then notes whose text does (case- and diacritic-insensitive).
-    /// Files larger than `maxSearchFileSize` are matched by name only.
-    public static func search(_ root: URL, query: String) throws -> [URL] {
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !needle.isEmpty else { return [] }
-        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
-        var byName: [URL] = []
-        var byContent: [URL] = []
-        let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys,
-                                                        options: [.skipsHiddenFiles, .skipsPackageDescendants])
-        while let url = enumerator?.nextObject() as? URL {
-            try Task.checkCancellation()   // a newer query replaced this search
-            guard isNote(url) else { continue }
-            if url.deletingPathExtension().lastPathComponent.range(of: needle, options: options) != nil {
-                byName.append(url)
-            } else if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= maxSearchFileSize,
-                      let data = try? Data(contentsOf: url),
-                      TextDecoding.decode(data).text.range(of: needle, options: options) != nil {
-                byContent.append(url)
-            }
-        }
-        let byPath = { (a: URL, b: URL) in a.path.localizedStandardCompare(b.path) == .orderedAscending }
-        return byName.sorted(by: byPath) + byContent.sorted(by: byPath)
+    /// Files larger than `maxSearchFileSize` are matched by name only. Reads every note: to search
+    /// repeatedly, keep a `LibraryIndex`.
+    public static func search(_ root: URL, query: String) -> [URL] {
+        var index = LibraryIndex(root: root)
+        index.refresh()
+        return index.search(query)
     }
 
     /// Creates an empty `Untitled.md` (or `Untitled 2.md`, …) in `folder`, never overwriting.
