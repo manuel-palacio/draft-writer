@@ -102,12 +102,19 @@ import Testing
     }
 
     @Test func footerLabelFormatsCounts() {
-        let stats = TextStats(words: 1234, characters: 7890, readingMinutes: 6)
-        #expect(StatsFooter.label(for: stats, locale: Locale(identifier: "en_US")) == "1,234 words · 7,890 characters · 6 min")
+        let stats = TextStats(words: 1234, sentences: 56, characters: 7890, charactersWithoutSpaces: 6543, readingMinutes: 6)
+        #expect(StatsFooter.label(for: stats, locale: Locale(identifier: "en_US"))
+                == "1,234 words · 56 sentences · 7,890 characters (6,543 without spaces) · 6 min")
     }
 
     @Test func footerLabelSingular() {
-        let stats = TextStats(words: 1, characters: 1, readingMinutes: 1)
-        #expect(StatsFooter.label(for: stats, locale: Locale(identifier: "en_US")) == "1 word · 1 character · 1 min")
+        let stats = TextStats(words: 1, sentences: 1, characters: 1, charactersWithoutSpaces: 1, readingMinutes: 1)
+        #expect(StatsFooter.label(for: stats, locale: Locale(identifier: "en_US"))
+                == "1 word · 1 sentence · 1 character (1 without spaces) · 1 min")
+    }
+
+    @Test func footerLabelForEmptyText() {
+        #expect(StatsFooter.label(for: TextStats.compute(""), locale: Locale(identifier: "en_US"))
+                == "0 words · 0 sentences · 0 characters (0 without spaces) · 0 min")
     }
 }

@@ -22,6 +22,14 @@ import Testing
         #expect(TextStats.compute(text).words >= 50_000)
     }
 
+    /// Runs off the main actor 300 ms after each edit; the footer should catch up well within a second.
+    @Test func statsLongDocument() {
+        let bridged = NSTextStorage(string: text).string
+        let ms = milliseconds { _ = TextStats.compute(bridged) }
+        #expect(ms < 300, "stats took \(ms) ms")
+        print("stats: \(ms) ms")
+    }
+
     @Test func stylesLongDocument() {
         _ = MarkdownStyler.styles(for: text)   // warm up
         let ms = milliseconds { _ = MarkdownStyler.styles(for: text) }
