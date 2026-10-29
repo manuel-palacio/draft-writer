@@ -177,6 +177,11 @@ final class LibraryStore {
         return trashed
     }
 
+    #if DEBUG
+    /// UI tests: browse `folder` for this launch without replacing the saved library.
+    func activateForTesting(_ folder: URL) { activate(folder) }
+    #endif
+
     private func activate(_ url: URL) {
         deactivate()
         if !activeScopes.contains(url), url.startAccessingSecurityScopedResource() { activeScopes.append(url) }
