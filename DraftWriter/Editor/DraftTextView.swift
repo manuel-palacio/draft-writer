@@ -1,4 +1,5 @@
 import AppKit
+import DraftKit
 
 /// The editing surface: a TextKit 2 `NSTextView` that keeps its text in a centred column.
 final class DraftTextView: NSTextView {
@@ -70,9 +71,61 @@ final class DraftTextView: NSTextView {
     private(set) var isMouseSelecting = false
 
     override func mouseDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.command), openLink(at: characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))) {
+            return
+        }
         isMouseSelecting = true
         defer { isMouseSelecting = false }
         super.mouseDown(with: event)   // tracks the mouse until it goes up
+    }
+
+    // MARK: Markdown editing
+
+    /// Opens web and mail links in their default apps (replaceable in tests).
+    var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
+
+    /// ⌘-click: opens the http(s) or mailto link at `location`. Returns false (a normal click) if there is none.
+    func openLink(at location: Int) -> Bool {
+        guard let destination = MarkdownEditing.linkDestination(in: string, at: location),
+              let url = URL(string: destination), PreviewView.Coordinator.opensExternally(url) else { return false }
+        openURL(url)
+        return true
+    }
+
+    @objc func formatBold(_ sender: Any?) { apply(MarkdownEditing.wrap(string, selection: selectedRange(), marker: "**")) }
+    @objc func formatItalic(_ sender: Any?) { apply(MarkdownEditing.wrap(string, selection: selectedRange(), marker: "*")) }
+    @objc func formatLink(_ sender: Any?) { apply(MarkdownEditing.link(string, selection: selectedRange())) }
+
+    @objc func toggleTaskCheckbox(_ sender: Any?) {
+        if let edit = MarkdownEditing.toggleTask(string, selection: selectedRange()) { apply(edit) }
+    }
+
+    override func insertNewline(_ sender: Any?) {
+        let selection = selectedRange()
+        guard !hasMarkedText(), selection.length == 0,
+              let edit = MarkdownEditing.newline(string, at: selection.location) else { return super.insertNewline(sender) }
+        apply(edit)
+    }
+
+    override func insertTab(_ sender: Any?) {
+        guard !hasMarkedText(), let edit = MarkdownEditing.indent(string, selection: selectedRange()) else { return super.insertTab(sender) }
+        apply(edit)
+    }
+
+    override func insertBacktab(_ sender: Any?) {
+        guard !hasMarkedText(), let edit = MarkdownEditing.outdent(string, selection: selectedRange()) else { return super.insertBacktab(sender) }
+        apply(edit)
+    }
+
+    /// Makes `edit` as one undo step, through the same path as typing (so the delegate restyles and the document
+    /// sees the change).
+    func apply(_ edit: TextEdit) {
+        breakUndoCoalescing()
+        guard shouldChangeText(in: edit.range, replacementString: edit.replacement) else { return }
+        textStorage?.replaceCharacters(in: edit.range, with: NSAttributedString(string: edit.replacement, attributes: typingAttributes))
+        didChangeText()
+        setSelectedRange(edit.selection)
+        breakUndoCoalescing()
     }
 
     /// Scrolls so the caret's line sits in the middle of the view. The caret rect comes from TextKit 2's

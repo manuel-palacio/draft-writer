@@ -27,6 +27,7 @@ struct DraftWriterApp: App {
         }
         .commands {
             EditorCommands(settings: settings)
+            FormatCommands()
             ExportCommands(settings: settings)
             LibraryCommands(settings: settings, store: library)
             NavigationCommands(store: library)

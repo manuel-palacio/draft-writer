@@ -51,3 +51,24 @@ extension FocusMode {
         }
     }
 }
+
+/// Format menu: Markdown shortcuts, sent down the responder chain to the focused editor.
+struct FormatCommands: Commands {
+    var body: some Commands {
+        CommandMenu("Format") {
+            Button("Bold") { send(#selector(DraftTextView.formatBold(_:))) }
+                .keyboardShortcut("b")
+            Button("Italic") { send(#selector(DraftTextView.formatItalic(_:))) }
+                .keyboardShortcut("i")
+            Button("Link") { send(#selector(DraftTextView.formatLink(_:))) }
+                .keyboardShortcut("k")
+            Divider()
+            Button("Toggle Task") { send(#selector(DraftTextView.toggleTaskCheckbox(_:))) }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
+        }
+    }
+
+    private func send(_ action: Selector) {
+        NSApp.sendAction(action, to: nil, from: nil)
+    }
+}
