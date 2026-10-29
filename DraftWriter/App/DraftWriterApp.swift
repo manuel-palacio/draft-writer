@@ -12,6 +12,7 @@ struct DraftWriterApp: App {
         }
         #endif
         LibraryStore.shared.restore()
+        TemplateFolder.shared.restore()
     }
 
     var body: some Scene {

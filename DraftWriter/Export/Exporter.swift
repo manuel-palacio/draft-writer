@@ -16,6 +16,8 @@ struct ExportSource {
     let title: String
     let documentFolder: URL?
     var font: EditorFont = .duo
+    /// The template folder's stylesheet; nil uses the built-in one.
+    var templateCSS: String?
 }
 
 enum ExportError: LocalizedError {
@@ -36,7 +38,8 @@ enum Exporter {
     static let margin: CGFloat = 56.7   // 2 cm
 
     static func html(_ source: ExportSource) -> String {
-        PreviewRenderer.page(for: source.markdown, title: source.title, css: PreviewAssets.exportCSS(font: source.font, includesCode: hasCode(source.markdown)))
+        PreviewRenderer.page(for: source.markdown, title: source.title,
+                             css: source.templateCSS ?? PreviewAssets.exportCSS(font: source.font, includesCode: hasCode(source.markdown)))
     }
 
     private static func hasCode(_ markdown: String) -> Bool {

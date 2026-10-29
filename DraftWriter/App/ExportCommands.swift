@@ -18,6 +18,8 @@ struct ExportCommands: Commands {
                 .disabled(source == nil)
             Button("Export as PDF…") { if let source { exportPDF(source) } }
                 .disabled(source == nil)
+            Button("Export as Word…") { if let source { exportWord(source) } }
+                .disabled(source == nil)
             Divider()
             Button("Print…") {
                 guard let source else { return }
@@ -43,6 +45,13 @@ struct ExportCommands: Commands {
             Task { @MainActor in
                 do { try await Exporter.writePDF(source, to: url, pageSize: settings.pageSize) } catch { show(error) }
             }
+        }
+    }
+
+    @MainActor
+    private func exportWord(_ source: ExportSource) {
+        chooseDestination(for: source, type: UTType(filenameExtension: "docx") ?? .data) { url in
+            try Exporter.docx(source).write(to: url, options: .atomic)
         }
     }
 
